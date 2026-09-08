@@ -1,0 +1,103 @@
+version: 2
+
+# ============================================================================
+# MACHINE LEARNING FEATURE STORE CONTRACTS & QUALITY TESTS
+# ============================================================================
+
+models:
+  # --------------------------------------------------------------------------
+  # 1. DAILY PRICING AGGREGATIONS
+  # --------------------------------------------------------------------------
+  - name: ml_daily_price
+    description: "Average price per experience + date, aggregated from fact_experience_availability."
+    columns:
+      - name: experience_id
+        description: "Foreign key linking price to dim_experience."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_experience')
+                field: experience_id
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - date_day
+
+  # --------------------------------------------------------------------------
+  # 2. BASE FEATURE SET & TARGET LABELS
+  # --------------------------------------------------------------------------
+  - name: ml_base_features
+    description: >
+      One row per experience + date. Joins calendar and experience static 
+      attributes with the day's actual outcomes (target_* columns).
+    columns:
+      - name: experience_id
+        description: "Foreign key linking feature record to dim_experience."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_experience')
+                field: experience_id
+
+      - name: target_bookings
+        description: "Primary regression target label (total daily bookings)."
+        tests: [not_null]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - feature_date
+
+  # --------------------------------------------------------------------------
+  # 3. ROLLING & TIME-SERIES LAG FEATURES
+  # --------------------------------------------------------------------------
+  - name: ml_rolling_features
+    description: >
+      ml_base_features plus trailing/lag booking and utilization features.
+      Every window excludes the current row to prevent target leakage.
+    columns:
+      - name: days_of_prior_history
+        description: "Number of historical days recorded prior to feature_date."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - feature_date
+
+  # --------------------------------------------------------------------------
+  # 4. FINAL PRODUCTION FEATURE STORE TABLE
+  # --------------------------------------------------------------------------
+  - name: ml_demand_features
+    description: >
+      Final, training-ready feature table for demand forecasting. The single 
+      source of truth for downstream Python ML pipelines and Airflow tasks.
+      CRITICAL: target_* columns are training labels, NOT input features.
+    columns:
+      - name: experience_id
+        description: "Foreign key linking feature record to dim_experience."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_experience')
+                field: experience_id
+
+      - name: target_bookings
+        description: "Primary regression target label."
+        tests: [not_null]
+
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - feature_date
