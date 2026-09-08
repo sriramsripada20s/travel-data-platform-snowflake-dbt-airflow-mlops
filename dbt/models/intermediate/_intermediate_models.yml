@@ -1,0 +1,110 @@
+version: 2
+
+# ============================================================================
+# INTERMEDIATE LAYER DATA CONTRACTS & INTEGRITY TESTS
+# ============================================================================
+
+models:
+  # --------------------------------------------------------------------------
+  # 1. ENRICHED BOOKINGS (MAIN PIPELINE)
+  # --------------------------------------------------------------------------
+  - name: int_booking_details
+    description: >
+      Bookings enriched with experience and supplier attributes. Excludes
+      the ~51 orphaned-FK bookings by design (inner join) -- see
+      int_orphaned_bookings for those. 
+      
+      HARD DATA-QUALITY GATE: Because this model's inner join intentionally 
+      filters out unresolvable foreign keys, the relationship tests below must 
+      ALWAYS pass. If either test fails, it means our transformation logic 
+      or join condition is broken!
+    columns:
+      - name: booking_id
+        description: "Primary key for valid bookings."
+        tests: [unique, not_null]
+
+      - name: experience_id
+        description: "Foreign key linking to stg_experiences."
+        tests:
+          - relationships:
+              config:
+                severity: error  # Hard gate: ensures 0 orphan FKs reach downstream models
+              arguments:
+                to: ref('stg_experiences')
+                field: experience_id
+
+      - name: supplier_id
+        description: "Foreign key linking to stg_suppliers."
+        tests:
+          - relationships:
+              config:
+                severity: error  # Hard gate: ensures every experience links to a real supplier
+              arguments:
+                to: ref('stg_suppliers')
+                field: supplier_id
+
+  # --------------------------------------------------------------------------
+  # 2. ORPHANED BOOKINGS (DATA QUALITY EXCEPTION QUEUE)
+  # --------------------------------------------------------------------------
+  - name: int_orphaned_bookings
+    description: >
+      The complement of int_booking_details -- holds the ~51 bookings whose
+      experience_id does not resolve to a valid catalog entry. Preserved for 
+      100% financial auditability instead of being silently dropped.
+    columns:
+      - name: booking_id
+        description: "Primary key of the excluded booking."
+        tests: [unique, not_null]
+
+      - name: orphan_reason
+        description: "Categorical reason for exclusion."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['INVALID_EXPERIENCE_FK']
+
+  # --------------------------------------------------------------------------
+  # 3. CUSTOMER ACTIVITY ROLLUP
+  # --------------------------------------------------------------------------
+  - name: int_customer_activity
+    description: "One row per customer, summarizing booking and clickstream history."
+    columns:
+      - name: customer_id
+        description: "Primary key for customer profiles."
+        tests: [unique, not_null]
+
+      - name: total_bookings
+        description: "Lifetime booking count."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+
+      - name: confirmed_bookings
+        description: "Lifetime confirmed booking count."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= total_bookings"  # Logical check: confirmed can't exceed total
+
+  # --------------------------------------------------------------------------
+  # 4. DAILY EXPERIENCE PERFORMANCE & METRICS
+  # --------------------------------------------------------------------------
+  - name: int_experience_daily_metrics
+    description: "One row per experience + date, summarizing demand and utilization."
+    columns:
+      - name: experience_id
+        description: "Foreign key linking to stg_experiences."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_experiences')
+                field: experience_id
+
+    # Enforces composite grain uniqueness across experience_id and experience_date
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - experience_date

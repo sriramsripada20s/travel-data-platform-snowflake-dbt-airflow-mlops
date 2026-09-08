@@ -1,0 +1,165 @@
+version: 2
+
+# ============================================================================
+# STAGING LAYER DATA CONTRACTS & QUALITY TESTS
+# ============================================================================
+
+models:
+  # --------------------------------------------------------------------------
+  # 1. SUPPLIERS
+  # --------------------------------------------------------------------------
+  - name: stg_suppliers
+    description: "One row per supplier, structurally cleaned."
+    columns:
+      - name: supplier_id
+        description: "Primary key for suppliers."
+        tests: [unique, not_null]
+
+      - name: supplier_status
+        description: "Contractual state of the supplier."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['ACTIVE', 'INACTIVE']
+
+  # --------------------------------------------------------------------------
+  # 2. EXPERIENCES
+  # --------------------------------------------------------------------------
+  - name: stg_experiences
+    description: "One row per bookable experience."
+    columns:
+      - name: experience_id
+        description: "Primary key for experiences."
+        tests: [unique, not_null]
+
+      - name: supplier_id
+        description: "Foreign key referencing stg_suppliers."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_suppliers')
+                field: supplier_id
+
+      - name: base_price
+        description: "Default ticket price."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "> 0"
+
+  # --------------------------------------------------------------------------
+  # 3. CUSTOMERS
+  # --------------------------------------------------------------------------
+  - name: stg_customers
+    description: "One row per customer profile."
+    columns:
+      - name: customer_id
+        description: "Primary key for customers."
+        tests: [unique, not_null]
+
+      - name: customer_segment
+        description: "Tenure-derived customer tier."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['New', 'Repeat', 'VIP', 'Dormant']
+
+  # --------------------------------------------------------------------------
+  # 4. AVAILABILITY
+  # --------------------------------------------------------------------------
+  - name: stg_availability
+    description: "One row per experience + date + timeslot."
+    columns:
+      - name: experience_id
+        description: "Foreign key referencing stg_experiences."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_experiences')
+                field: experience_id
+
+    # Grain integrity test across 3 composite columns
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - experience_date
+              - time_slot
+
+  # --------------------------------------------------------------------------
+  # 5. BOOKINGS
+  # --------------------------------------------------------------------------
+  - name: stg_bookings
+    description: >
+      One row per booking, deduplicated on booking_id. Tests set to 'warn'
+      are EXPECTED to fail due to deliberate Phase 1 data anomalies (null
+      customer_ids, negative amounts, invalid FKs).
+    columns:
+      - name: booking_id
+        description: "Primary key for bookings."
+        tests: [unique, not_null]
+
+      - name: customer_id
+        description: "Foreign key referencing stg_customers."
+        tests:
+          - not_null:
+              config:
+                severity: warn  # Flags injected nulls without stopping pipeline runs
+
+      - name: experience_id
+        description: "Foreign key referencing stg_experiences."
+        tests:
+          - relationships:
+              config:
+                severity: warn  # Flags injected invalid FKs as warnings
+              arguments:
+                to: ref('stg_experiences')
+                field: experience_id
+
+      - name: booking_status
+        description: "Current lifecycle state of the booking."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['CONFIRMED', 'CANCELLED', 'REFUNDED']
+
+      - name: booking_amount
+        description: "Total dollar amount paid."
+        tests:
+          - dbt_utils.expression_is_true:
+              config:
+                severity: warn  # Flags negative booking amounts
+              arguments:
+                expression: ">= 0"
+
+  # --------------------------------------------------------------------------
+  # 6. WEB EVENTS
+  # --------------------------------------------------------------------------
+  - name: stg_web_events
+    description: "One row per behavioral event, deduplicated on event_id."
+    columns:
+      - name: event_id
+        description: "Primary key for behavioral clicks."
+        tests: [unique, not_null]
+
+      - name: customer_id
+        description: "Foreign key referencing stg_customers."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+
+      - name: event_type
+        description: "Action taken in the booking funnel."
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'SEARCH'
+                  - 'VIEW_EXPERIENCE'
+                  - 'CHECK_AVAILABILITY'
+                  - 'ADD_TO_CART'
+                  - 'CHECKOUT'
+                  - 'PURCHASE'
