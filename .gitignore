@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# --- Generated data (regenerable via generate_all.py, not meant to live in git) ---
+data/generated/clean/*.csv
+data/generated/raw/*.csv
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Environment / secrets ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- AWS: never commit a filled-in trust policy (contains your account ID / role ARN) ---
+infra/aws/trust_policy_final.json
+
+# --- dbt (Phase 3) ---
+target/
+dbt_packages/
+logs/
+.dbt/
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

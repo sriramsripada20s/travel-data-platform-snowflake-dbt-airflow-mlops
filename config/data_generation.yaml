@@ -1,0 +1,122 @@
+# Business-tunable settings for synthetic data generation.
+# NOTE: generate_suppliers.py and generate_experiences.py currently hardcode
+# their own distributions in-file rather than reading this YAML — this file
+# documents those values for reference/consistency, and is the config the
+# NEW generators (customers, availability, bookings, web_events) should
+# read from directly, so business assumptions don't get re-buried in code
+# four more times.
+
+random_seed: 42
+scale_factor: 0.05
+
+cities:
+  Paris:     { country: France,               weight: 0.24 }
+  Rome:      { country: Italy,                weight: 0.22 }
+  London:    { country: United Kingdom,       weight: 0.21 }
+  Dubai:     { country: United Arab Emirates, weight: 0.19 }
+  Barcelona: { country: Spain,                weight: 0.14 }
+
+experience_categories:
+  Attraction:    { weight: 0.20, price_range: [25, 120],  capacity_range: [100, 1200] }
+  Guided Tour:   { weight: 0.18, price_range: [30, 150],  capacity_range: [10, 80] }
+  Museum:        { weight: 0.14, price_range: [15, 80],   capacity_range: [100, 1000] }
+  Theme Park:    { weight: 0.10, price_range: [40, 180],  capacity_range: [500, 5000] }
+  Cruise:        { weight: 0.08, price_range: [35, 250],  capacity_range: [50, 600] }
+  Food & Drink:  { weight: 0.12, price_range: [25, 140],  capacity_range: [10, 100] }
+  Adventure:     { weight: 0.10, price_range: [40, 300],  capacity_range: [5, 80] }
+  Show:          { weight: 0.08, price_range: [25, 200],  capacity_range: [50, 2000] }
+
+supplier_types:
+  Tour Operator:      0.35
+  Attraction:         0.20
+  Museum:             0.12
+  Theme Park:         0.08
+  Cruise Operator:    0.10
+  Activity Provider:  0.15
+
+supplier_status:
+  ACTIVE:   0.95
+  INACTIVE: 0.05
+
+commission_rate_range: [0.10, 0.30]
+
+acquisition_channels:
+  Organic:    0.30
+  Google Ads: 0.22
+  Meta Ads:   0.18
+  Affiliate:  0.12
+  Email:      0.10
+  Direct:     0.08
+
+customer_countries:
+  USA:     0.30
+  UK:      0.18
+  Germany: 0.14
+  France:  0.10
+  India:   0.10
+  UAE:     0.08
+  Other:   0.10
+
+customer_segments:
+  New:     0.45
+  Repeat:  0.35
+  VIP:     0.10
+  Dormant: 0.10
+
+booking_channels:
+  MOBILE:  0.55
+  WEB:     0.35
+  PARTNER: 0.10
+
+booking_status_base_rates:
+  CONFIRMED: 0.80
+  CANCELLED: 0.15
+  REFUNDED:  0.05
+  # These are BASE rates only. generate_bookings.py should adjust
+  # cancellation probability per-booking using lead time, discount size,
+  # channel, and customer history — see docs/business_rules.md.
+
+seasonality_multiplier:
+  1: 0.80
+  2: 0.80
+  3: 0.90
+  4: 1.00
+  5: 1.05
+  6: 1.20
+  7: 1.30
+  8: 1.30
+  9: 1.05
+  10: 0.95
+  11: 0.90
+  12: 1.15
+
+weekend_demand_multiplier: 1.35
+
+funnel_dropoff:
+  after_search: 0.38
+  after_view: 0.44
+  after_availability_check: 0.49
+  after_add_to_cart: 0.28
+  after_checkout: 0.27
+
+device_types:
+  mobile: 0.60
+  desktop: 0.32
+  tablet: 0.08
+
+traffic_sources:
+  organic: 0.30
+  google_ads: 0.22
+  meta_ads: 0.18
+  affiliate: 0.12
+  email: 0.10
+  direct: 0.08
+
+data_quality_injection:
+  duplicate_booking_pct: 0.002
+  null_customer_id_pct: 0.001
+  negative_booking_amount_pct: 0.0005
+  invalid_experience_fk_pct: 0.0005
+  duplicate_event_pct: 0.002
+  out_of_order_event_timestamp_pct: 0.001
+  late_arriving_booking_pct: 0.001
