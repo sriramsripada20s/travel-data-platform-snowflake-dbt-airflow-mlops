@@ -1,0 +1,149 @@
+version: 2
+
+# ============================================================================
+# MARTS LAYER DATA CONTRACTS & STAR SCHEMA INTEGRITY TESTS
+# ============================================================================
+
+models:
+  # --------------------------------------------------------------------------
+  # 1. CUSTOMER DIMENSION
+  # --------------------------------------------------------------------------
+  - name: dim_customer
+    description: "One row per customer profile, enriched with LTV and behavioral summaries."
+    columns:
+      - name: customer_id
+        description: "Primary key for customers."
+        tests: [unique, not_null]
+
+  # --------------------------------------------------------------------------
+  # 2. SUPPLIER DIMENSION
+  # --------------------------------------------------------------------------
+  - name: dim_supplier
+    description: "One row per tour operator supplier."
+    columns:
+      - name: supplier_id
+        description: "Primary key for suppliers."
+        tests: [unique, not_null]
+
+  # --------------------------------------------------------------------------
+  # 3. EXPERIENCE DIMENSION
+  # --------------------------------------------------------------------------
+  - name: dim_experience
+    description: "One row per bookable travel experience catalog entry."
+    columns:
+      - name: experience_id
+        description: "Primary key for experiences."
+        tests: [unique, not_null]
+
+      - name: supplier_id
+        description: "Foreign key linking experience to its operating supplier."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_supplier')
+                field: supplier_id
+
+  # --------------------------------------------------------------------------
+  # 4. CONFORMED DATE DIMENSION
+  # --------------------------------------------------------------------------
+  - name: dim_date
+    description: "One row per calendar day, covering the platform's full date range."
+    columns:
+      - name: date_day
+        description: "Primary key (calendar date)."
+        tests: [unique, not_null]
+
+  # --------------------------------------------------------------------------
+  # 5. BOOKINGS TRANSACTIONAL FACT
+  # --------------------------------------------------------------------------
+  - name: fact_bookings
+    description: >
+      One row per valid booking (orphaned-FK bookings excluded by design --
+      see int_orphaned_bookings).
+    columns:
+      - name: booking_id
+        description: "Primary key for bookings."
+        tests: [unique, not_null]
+
+      - name: customer_id
+        description: "Foreign key linking to dim_customer."
+        tests:
+          - relationships:
+              config:
+                severity: warn  # ~101 known nulls flow through from stg_bookings
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+
+      - name: experience_id
+        description: "Foreign key linking to dim_experience."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_experience')
+                field: experience_id
+
+      - name: date_day
+        description: "Foreign key linking booking date to dim_date."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+
+  # --------------------------------------------------------------------------
+  # 6. WEB CLICKSTREAM FACT
+  # --------------------------------------------------------------------------
+  - name: fact_web_events
+    description: "One row per behavioral funnel event (click/search/purchase)."
+    columns:
+      - name: event_id
+        description: "Primary key for behavioral clicks."
+        tests: [unique, not_null]
+
+      - name: customer_id
+        description: "Foreign key linking event to dim_customer."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customer')
+                field: customer_id
+
+      - name: date_day
+        description: "Foreign key linking event timestamp to dim_date."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+
+  # --------------------------------------------------------------------------
+  # 7. EXPERIENCE AVAILABILITY FACT
+  # --------------------------------------------------------------------------
+  - name: fact_experience_availability
+    description: "One row per experience + date + timeslot inventory listing."
+    columns:
+      - name: experience_id
+        description: "Foreign key linking inventory slot to dim_experience."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_experience')
+                field: experience_id
+
+      - name: date_day
+        description: "Foreign key linking slot date to dim_date."
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+
+    # Enforces inventory uniqueness at the slot grain
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - experience_id
+              - date_day
+              - time_slot
