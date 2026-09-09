@@ -10,6 +10,7 @@ venv/
 # --- Generated data (regenerable via generate_all.py, not meant to live in git) ---
 data/generated/clean/*.csv
 data/generated/raw/*.csv
+data/generated/incremental/**/*.csv
 
 # --- Jupyter ---
 .ipynb_checkpoints/
@@ -20,6 +21,8 @@ data/generated/raw/*.csv
 *.pem
 *.key
 ml/.env
+src/data_generation/.env
+streamlit_app/.streamlit/secrets.toml
 models/*.joblib
 
 # --- AWS: never commit a filled-in trust policy (contains your account ID / role ARN) ---
@@ -30,6 +33,13 @@ target/
 dbt_packages/
 logs/
 .dbt/
+
+# --- Airflow (Phase 7) ---
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+airflow/webserver_config.py
+airflow/.env
 
 # --- OS / editor cruft ---
 .DS_Store
