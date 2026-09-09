@@ -19,6 +19,8 @@ data/generated/raw/*.csv
 .env.*
 *.pem
 *.key
+ml/.env
+models/*.joblib
 
 # --- AWS: never commit a filled-in trust policy (contains your account ID / role ARN) ---
 infra/aws/trust_policy_final.json
