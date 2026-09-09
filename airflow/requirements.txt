@@ -1,0 +1,13 @@
+apache-airflow-providers-snowflake
+apache-airflow-providers-amazon
+apache-airflow-providers-slack
+dbt-core
+dbt-snowflake
+snowflake-connector-python
+boto3
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+python-dotenv

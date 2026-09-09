@@ -1,0 +1,95 @@
+version: "3.8"
+
+services:
+  # ============================================================================
+  # 1. METADATA DATABASE (PostgreSQL)
+  # ============================================================================
+  # Airflow requires a relational database to store DAG run history, task states,
+  # variables, connections, and XComs. LocalExecutor uses Postgres to manage tasks.
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      # Persists Postgres database data locally on disk across container restarts
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      # Verifies Postgres is accepting database connections before Airflow boots up
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  # ============================================================================
+  # 2. INITIALIZATION SERVICE (Airflow DB Setup & Admin User)
+  # ============================================================================
+  # Runs once on startup to initialize the metadata database and create the admin user.
+  # Other Airflow services depend on this completing successfully first.
+  airflow-init:
+    build: .
+    depends_on:
+      - postgres
+    # Shared environment variables anchor definition (&airflow-common-env)
+    environment: &airflow-common-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false" # Prevents cluttering UI with sample DAGs
+      AIRFLOW__CORE__FERNET_KEY: "" # Fernet key for encrypting connection credentials
+      DBT_PROFILES_DIR: /opt/airflow/.dbt # Points dbt CLI tasks to Snowflake profile config
+    # Shared volume mounts anchor definition (&airflow-common-volumes)
+    volumes: &airflow-common-volumes
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./config:/opt/airflow/config
+      # Project code, data, dbt models, and ML artifacts mounted directly into container
+      - ../src:/opt/airflow/src
+      - ../dbt:/opt/airflow/dbt
+      - ../ml:/opt/airflow/ml
+      - ../models:/opt/airflow/models
+      - ../data:/opt/airflow/data
+      - ./dbt_profiles:/opt/airflow/.dbt
+    # Migration command initializes DB schemas and creates default admin user (admin/admin)
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin
+               --firstname admin --lastname admin --role Admin --email admin@example.com"
+
+  # ============================================================================
+  # 3. AIRFLOW WEBSERVER (UI & API)
+  # ============================================================================
+  # Serves the Airflow web interface at http://localhost:8080 to monitor DAG runs,
+  # view logs, trigger manual runs, and configure database connections.
+  airflow-webserver:
+    build: .
+    depends_on:
+      - airflow-init
+    environment: *airflow-common-env
+    volumes: *airflow-common-volumes
+    ports:
+      - "8080:8080" # Map host port 8080 to webserver container port 8080
+    command: airflow webserver
+    restart: always
+
+  # ============================================================================
+  # 4. AIRFLOW SCHEDULER (Task Execution Engine)
+  # ============================================================================
+  # The core engine that parses DAG python files, evaluates schedules (@daily),
+  # resolves task dependencies, and executes Python/dbt/S3 tasks via LocalExecutor.
+  airflow-scheduler:
+    build: .
+    depends_on:
+      - airflow-init
+    environment: *airflow-common-env
+    volumes: *airflow-common-volumes
+    command: airflow scheduler
+    restart: always
+
+# ============================================================================
+# PERSISTENT VOLUMES
+# ============================================================================
+volumes:
+  postgres-db-volume: # Named Docker volume for persistent PostgreSQL storage

@@ -21,7 +21,7 @@ RANDOM_SEED = int(os.environ.get("RANDOM_SEED", 42))
 SCALE_FACTOR = float(os.environ.get("SCALE_FACTOR", 0.05))
 
 START_DATE = "2025-09-01"
-END_DATE = "2026-08-31"
+END_DATE = "2026-09-07"
 
 # Base counts at SCALE_FACTOR = 1.0 (the full dataset)
 BASE_NUM_SUPPLIERS = 100

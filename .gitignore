@@ -16,12 +16,17 @@ data/generated/incremental/**/*.csv
 .ipynb_checkpoints/
 
 # --- Environment / secrets ---
+# Bare ".env" (no slash) matches a file of that name at ANY depth in the
+# repo -- this already covers ml/.env, src/data_generation/incremental/.env,
+# and any future one. The explicit entries below are kept anyway, purely
+# as documentation of which real credential files exist in this project.
 .env
 .env.*
 *.pem
 *.key
 ml/.env
 src/data_generation/.env
+src/data_generation/incremental/.env
 streamlit_app/.streamlit/secrets.toml
 models/*.joblib
 
@@ -40,6 +45,7 @@ airflow/airflow.db
 airflow/airflow.cfg
 airflow/webserver_config.py
 airflow/.env
+airflow/dbt_profiles/profiles.yml
 
 # --- OS / editor cruft ---
 .DS_Store

@@ -9,7 +9,7 @@ with date_spine as (
     {{ dbt_utils.date_spine(
         datepart="day",
         start_date="to_date('2025-05-01')",
-        end_date="to_date('2026-09-02')"
+        end_date="to_date('2028-01-01')"
     ) }}
 )
 
