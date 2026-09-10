@@ -17,20 +17,46 @@ The platform ingests marketplace activity daily, transforms it through a tested 
 [![Slack](https://img.shields.io/badge/Slack-Alerting-4A154B?style=flat&logo=slack&logoColor=white)](https://slack.com/)
 ---
 
-## Current Status
+## Business Problem
 
-| Phase | Status | Notes |
-|---|---|---|
-| 0 — Business design, architecture, KPIs | ✅ Done | |
-| 1 — Synthetic data generation | ✅ Done | One-time historical batch (Sep 2025–Sep 2026) + a separate daily incremental generator, both independently verified |
-| 2 — Snowflake + SQL | ✅ Done | S3 ↔ Snowflake via `COPY INTO`, both the historical bulk load and the daily append-only incremental path |
-| 3 — dbt + dimensional modeling | ✅ Done | 21 models, 67 tests — **no separate `analytics/` layer** (see note below) |
-| 4 — Business analytics + KPIs | ✅ Done | Delivered as a live dashboard (Streamlit-in-Snowflake), not additional dbt models |
-| 5 — ML feature engineering | ✅ Done | Leakage-safe rolling-window features, split into 4 focused dbt models |
-| 6 — Baseline + demand forecasting model | ✅ Done | 3-algorithm comparison (XGBoost, Random Forest, Ridge) — see Machine Learning section for the honest result |
-| 7 — Airflow 3.x orchestration | ✅ Done | Two DAGs, deployed via Docker Compose, verified end to end including a real champion/challenger decision |
-| 8 — CI/CD | ✅ Done | CI: 6 automated checks + enforced branch protection, proven end-to-end. CD: dbt docs auto-published to GitHub Pages, Streamlit dashboard auto-deployed to Snowflake, both on every merge to `main` |
-| 9 — Slack alerting | ✅ Done | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7
+Travel marketplaces process bookings, availability, and behavioral data across multiple sources — booking transactions, real-time inventory feeds, and customer browsing/conversion events — all of which must stay reliable as the platform scales.
+
+* **Fragmented Data & Quality Risk:** Duplicate bookings, missing customer IDs, and invalid foreign keys routinely enter raw data undetected, silently corrupting downstream revenue and capacity reporting if not caught before they reach business-facing tables.
+* **Reactive Demand Planning:** Booking cancellations and capacity shortfalls are typically discovered only after they've already affected revenue, rather than forecasted with enough lead time to act on.
+* **Manual, Engineer-Dependent Reporting:** Business stakeholders depend on data engineers to write ad-hoc SQL for daily questions — today's bookings, revenue by city, which experiences are near capacity — with no self-service path to the same answers.
+
+💡 **Proposed Solution:** An automated data and ML platform built on AWS S3, Snowflake, dbt, and Apache Airflow that isolates data-quality defects at the staging layer via hard-gated tests, models a governed dimensional layer feeding a champion/challenger demand-forecasting pipeline, and surfaces self-service analytics through a live Streamlit-in-Snowflake dashboard — with every change to the pipeline validated by automated CI/CD before it reaches production.
+
+## 📌 Architecture Overview
+
+Data flows from a daily incremental generator through AWS S3 staging into Snowflake, where it undergoes automated validation, dbt dimensional transformations, a champion/challenger demand-forecasting pipeline, and a live Streamlit-in-Snowflake dashboard — all orchestrated end to end by Apache Airflow and deployed through automated CI/CD.
+
+<img width="1121" height="681" alt="image" src="https://github.com/user-attachments/assets/012e6565-a03d-44fa-beb7-bc9dc75418be" />
+
+* **Data Sources:** Batch historical generator (one-time full-year backfill) and a daily incremental generator producing bookings, availability, and web-event activity — statistically consistent with each other via shared demand/cancellation logic.
+* **Ingestion:** Python generators writing partitioned CSVs to AWS S3, loaded into Snowflake via `COPY INTO` — historical bulk load and daily append-only incremental path, both orchestrated by Airflow.
+* **Storage (Landing):** AWS S3 (partitioned by date) and Snowflake `RAW` schema landing tables.
+* **Processing / Transformation:** dbt Core (Staging → Intermediate → Marts, including a dedicated `marts/ml` feature layer) on Snowflake, with a hard-fail data-quality gate on booking foreign-key integrity.
+* **Data Warehouse:** Snowflake (`TRAVEL_PLATFORM`).
+* **Orchestration:** Apache Airflow 3.x, two DAGs (daily ingestion + weekly ML training), deployed via Docker Compose.
+* **Machine Learning:** scikit-learn / XGBoost demand forecasting, 3-algorithm comparison, with a champion/challenger promotion gate evaluated weekly.
+* **Analytics:** Streamlit-in-Snowflake live dashboard (6 charts), plus a dbt Semantic Layer defining governed metrics (`total_bookings`, `gmv`, `cancellation_rate`, `repeat_customer_rate`), queryable via `dbt sl query`.
+* **CI/CD:** GitHub Actions — 6 automated checks with enforced branch protection, plus auto-deploy of dbt docs (GitHub Pages) and the Streamlit dashboard on every merge to `main`.
+
+## Project Phase Plan
+
+| Phase | Notes |
+|---|---|
+| 0 — Business design, architecture, KPIs | Business Problem, Understanding, Architecture and Tech Stack Used |
+| 1 — Synthetic data generation | One-time historical batch (Sep 2025–Sep 2026) + a separate daily incremental generator, both independently verified |
+| 2 — Snowflake + SQL | S3 ↔ Snowflake via `COPY INTO`, both the historical bulk load and the daily append-only incremental path |
+| 3 — dbt + dimensional modeling | 21 models, 67 tests — **no separate `analytics/` layer** (see note below) |
+| 4 — Business analytics + KPIs | Delivered as a live dashboard (Streamlit-in-Snowflake), not additional dbt models |
+| 5 — ML feature engineering | Leakage-safe rolling-window features, split into 4 focused dbt models |
+| 6 — Baseline + demand forecasting model | 3-algorithm comparison (XGBoost, Random Forest, Ridge) — see Machine Learning section for the honest result |
+| 7 — Airflow 3.x orchestration | Two DAGs, deployed via Docker Compose, verified end to end including a real champion/challenger decision |
+| 8 — CI/CD | CI: 6 automated checks + enforced branch protection, proven end-to-end. CD: dbt docs auto-published to GitHub Pages, Streamlit dashboard auto-deployed to Snowflake, both on every merge to `main` |
+| 9 — Slack alerting | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7 |
 
 **Airflow DAG Pipeline: showing a successful `travel_platform_daily_pipeline` run (all green).**
 
@@ -54,9 +80,7 @@ Build a production-style data and ML platform for a travel marketplace where cus
 * Adventure activities
 * City experiences
 
-The platform processes marketplace data, builds trusted analytical models, generates business KPIs, forecasts experience demand, predicts booking cancellation risk, and orchestrates the complete lifecycle using Apache Airflow — end to end, not as disconnected demos.
-
----
+The platform ingests marketplace data daily, transforms it through a tested dimensional model, generates business KPIs on a live dashboard, forecasts experience demand with a champion/challenger ML pipeline, and orchestrates the complete lifecycle — from data generation through model promotion — using Apache Airflow, deployed and validated through automated CI/CD. End to end, not as disconnected demos.
 
 ## Business Problem
 
@@ -103,59 +127,6 @@ This project builds the data platform needed to answer those questions — and a
 
 ---
 
-## Architecture — as actually built
-
-```text
-                    DATA SOURCES (synthetic)
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-          v                   v                   v
-      Bookings            Web Events         Availability
-          |                   |                   |
-          +-------------------+-------------------+
-                              |
-                              v
-               Python generators (batch + daily incremental)
-                              |
-                              v
-                       Amazon S3 (partitioned by date)
-                              |
-                              v
-                    AIRFLOW 3.x (2 DAGs, Docker-deployed)
-                              |
-                    generate -> validate -> load
-                              |
-                              v
-                        SNOWFLAKE RAW
-                              |
-                              v
-                             dbt
-                              |
-                +-------------+-------------+
-                |             |             |
-                v             v             v
-             STAGING     INTERMEDIATE      MARTS
-                                             |
-                              +--------------+--------------+
-                              |                             |
-                              v                             v
-                    Streamlit-in-Snowflake             ML FEATURES (dbt, in marts/ml)
-                       (live dashboard)                        |
-                                                                v
-                                                             Python
-                                                                |
-                                                    Model Training (3 algorithms)
-                                                                |
-                                                                v
-                                                  Champion/Challenger Evaluation
-                                                                |
-                                            +-------------------+-------------------+
-                                            |                                       |
-                                            v                                       v
-                                    Slack Alerts                          Predictions (planned)
-```
-
 📸 *The Streamlit dashboard (all 6 charts) — the strongest single visual proof-point in this project.*
 <img width="1876" height="900" alt="image" src="https://github.com/user-attachments/assets/4b44a64b-007b-40fa-96ff-05cee01d5605" />
 <img width="1905" height="906" alt="image" src="https://github.com/user-attachments/assets/56b307b5-fd52-468b-9d56-0b13aeb8672d" />
@@ -175,18 +146,6 @@ Delivered as a live Streamlit-in-Snowflake dashboard, not a static report:
 The analytics layer was built and validated before ML was introduced, so the underlying business data was trusted first.
 
 ---
-
-**Delivery workflow — CI and CD both built:**
-```text
-GitHub -> GitHub Actions (CI: lint, secrets scan, dbt parse, DAG tests, unit tests, dbt Slim CI)
-       -> Branch protection (enforced, verified end-to-end)
-       -> merge to main
-       -> GitHub Actions (CD): dbt docs -> GitHub Pages
-                              Streamlit dashboard -> Snowflake (auto-deployed via Snowflake CLI)
-```
-
----
-
 ## Technology Stack
 
 | Technology | Purpose |
@@ -292,6 +251,21 @@ Used to reconstruct the marketplace conversion funnel — visualized live on the
 
 ---
 
+---
+
+## Dataset Scale
+
+| Dataset | Target (full scale) | Actual (current run, `SCALE_FACTOR=0.3`) |
+|---|---:|---:|
+| Suppliers | 75–100 | 30 |
+| Experiences | 300–500 | 120 |
+| Customers | 30K–50K | 12,000 |
+| Bookings | 200K–300K | ~101,000 (batch) + daily incremental growth |
+| Availability | 250K–500K | ~102,000 |
+| Web Events | 750K–1.5M | ~1.5M |
+
+---
+
 ## Data Relationships
 
 ```text
@@ -344,22 +318,6 @@ SEARCH Rome -> VIEW Colosseum -> CHECK_AVAILABILITY -> ADD_TO_CART -> CHECKOUT -
      v
 Booking B98231
 ```
-
----
-
-## Dataset Scale
-
-| Dataset | Target (full scale) | Actual (current run, `SCALE_FACTOR=0.3`) |
-|---|---:|---:|
-| Suppliers | 75–100 | 30 |
-| Experiences | 300–500 | 120 |
-| Customers | 30K–50K | 12,000 |
-| Bookings | 200K–300K | ~101,000 (batch) + daily incremental growth |
-| Availability | 250K–500K | ~102,000 |
-| Web Events | 750K–1.5M | ~1.5M |
-
----
-
 ## Data Warehouse Model
 
 ### Booking Model
@@ -514,17 +472,6 @@ Two independent, path-scoped workflows, authenticating via a dedicated `producti
 | `deploy-streamlit.yml` | Changes to `streamlit_app/` merged to `main` | `snow streamlit deploy --replace` — updates the existing `TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD` app in place (same URL every time, never a new object) |
 
 📊 **[Live dbt documentation & lineage](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/)** — auto-published on every merge to `main`.
-
-**Real issues this surfaced, root-caused rather than worked around** (full detail in `docs/phase_8_ci_summary.md`):
-- A YAML parsing failure from an unquoted Snowflake password containing a `*` character
-- `dagbag.get_dag()` requiring a live metadata database the test container didn't have — switched to `dagbag.dags[dag_id]`, the more architecturally correct approach for static checks
-- `dim_date.sql`'s `dbt_utils.date_spine()` being unresolvable by a credential-free SQL linter — documented and excluded rather than faked
-- A genuine Slim CI bootstrap ordering problem — nothing to compare against until the manifest-publishing workflow ran successfully once
-- The earlier Streamlit consolidation had silently dropped the Snowflake CLI project files (`snowflake.yml`, `pyproject.toml`) needed for automated deploys
-- `snowflake.yml`'s schema had fields from the newer container-runtime app model unsupported by the installed CLI version — simplified to the universally-supported field set
-- `snow` CLI's connection resolution needed `--temporary-connection` to use generic env vars directly in a headless CI environment, rather than looking for a named connection that doesn't exist there
-
----
 
 ## Repository Structure — as actually built
 
