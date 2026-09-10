@@ -1,0 +1,38 @@
+name: Deploy Streamlit Dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "streamlit_app/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      # snowflake-cli-labs reads these SNOWFLAKE_* env vars directly --
+      # no connections.toml file needed in a headless CI environment.
+      # database/schema/warehouse/app identity come from streamlit_app/
+      # snowflake.yml itself, not from here.
+      SNOWFLAKE_ACCOUNT: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
+      SNOWFLAKE_USER: "${{ secrets.SNOWFLAKE_USER }}"
+      SNOWFLAKE_PASSWORD: "${{ secrets.SNOWFLAKE_PASSWORD }}"
+      SNOWFLAKE_ROLE: "ACCOUNTADMIN"
+      SNOWFLAKE_WAREHOUSE: "TRAVEL_WH"
+      SNOWFLAKE_DATABASE: "TRAVEL_PLATFORM"
+      SNOWFLAKE_SCHEMA: "MARTS"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Snowflake CLI
+        run: pip install snowflake-cli-labs
+
+      - name: Deploy to Snowflake
+        working-directory: streamlit_app
+        run: snow streamlit deploy --replace
