@@ -90,3 +90,19 @@ jobs:
             -v "${{ github.workspace }}/tests:/opt/airflow/tests" \
             travel-platform-airflow:ci \
             bash -c "pip install pytest && python -m pytest /opt/airflow/tests/airflow/ -v"
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pandas python-dotenv snowflake-connector-python
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v  
