@@ -73,6 +73,7 @@ def _on_dag_failure(context: dict) -> None:
     },
     tags=["travel-platform", "daily", "ingestion"],
 )
+
 def travel_platform_daily_pipeline():
 
     @task
@@ -87,6 +88,7 @@ def travel_platform_daily_pipeline():
             generate_bookings_and_events_for_date,
             open_availability_for_date,
         )
+        from snowflake_conn import get_connection
         from state import (
             get_active_experiences,
             get_existing_customer_ids,
@@ -96,6 +98,32 @@ def travel_platform_daily_pipeline():
         )
 
         target_date = dt.date.fromisoformat(ds)
+
+        # IDEMPOTENCY GUARD: refuse to regenerate a date that's already
+        # loaded -- without this, re-triggering an already-succeeded run
+        # silently doubles that day's bookings under new IDs (booking
+        # counters are re-queried fresh each run, so a rerun doesn't reuse
+        # old IDs -- it creates new, additional ones on top).
+        guard_conn = get_connection()
+        guard_cur = guard_conn.cursor()
+        try:
+            guard_cur.execute(
+                "SELECT COUNT(*) FROM RAW.RAW_BOOKINGS WHERE experience_date = %(d)s",
+                {"d": target_date},
+            )
+            existing_count = guard_cur.fetchone()[0]
+        finally:
+            guard_cur.close()
+
+        if existing_count > 0:
+            raise ValueError(
+                f"{target_date} already has {existing_count} bookings loaded in "
+                f"RAW_BOOKINGS. Refusing to regenerate -- re-running would ADD "
+                f"duplicate-content rows under new IDs, not overwrite. If this is "
+                f"intentional (e.g. cleaning up a bad run), delete the existing "
+                f"rows for this date first."
+            )
+
         experiences = get_active_experiences()
         customer_ids = get_existing_customer_ids()
         prior_cancellations = get_prior_cancellation_counts()
