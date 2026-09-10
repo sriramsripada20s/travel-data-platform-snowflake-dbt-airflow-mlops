@@ -35,4 +35,4 @@ jobs:
 
       - name: Deploy to Snowflake
         working-directory: streamlit_app
-        run: snow streamlit deploy --replace
+        run: snow streamlit deploy --replace --temporary-connection
