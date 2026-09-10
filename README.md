@@ -31,6 +31,9 @@ Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Le
 
 ---
 
+🎥*Watch Project Video Below for demonstration* 
+*https://github.com/sriramsripada20s/travel-data-platform-snowflake-dbt-airflow-mlops/issues/1*
+
 ## Project Goal
 
 Build a production-style data and ML platform for a travel marketplace where customers discover and book experiences such as:
@@ -163,8 +166,6 @@ Delivered as a live Streamlit-in-Snowflake dashboard, not a static report:
 * Top experiences (bookings, utilization, revenue)
 * Cancellation rate by lead-time bucket — directly visualizes the demand-signal design from `docs/business_rules.md`
 * Booking channel mix
-
-🎥 *Optional: a short screen recording — trigger the daily DAG, watch it succeed, refresh the dashboard showing new data, show the resulting Slack message. This one clip demonstrates the entire pipeline faster than any text.*
 
 The analytics layer was built and validated before ML was introduced, so the underlying business data was trusted first.
 
