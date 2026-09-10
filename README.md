@@ -22,7 +22,7 @@ Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Le
 | 9 — Docker / productionization | 🔶 Partial | Airflow itself is fully containerized; dbt/ML/generator code still runs directly on the host |
 | 10 — Slack alerting | ✅ Mostly done | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7, rather than as a separate later phase |
 | Secondary ML use case — cancellation prediction | ⏳ Deprioritized | Deliberate scope decision in favor of demand forecasting, not an oversight |
-| Bonus — Prometheus + Grafana, CI/CD | ⏳ Not started | |.
+| Bonus — Prometheus + Grafana, CI/CD | ⏳ Not started | |..
 
 
 **Airflow DAG Pipeline: showing a successful `travel_platform_daily_pipeline` run (all green).**
