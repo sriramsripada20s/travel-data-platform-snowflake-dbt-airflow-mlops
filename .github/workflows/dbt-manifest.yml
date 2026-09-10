@@ -1,0 +1,52 @@
+name: dbt Manifest (main)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dbt/**"
+
+jobs:
+  build-and-publish-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-snowflake
+
+      - name: Write profile from secrets
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << PROFILE
+          travel_experience_platform:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ACCOUNTADMIN
+                database: TRAVEL_PLATFORM
+                warehouse: TRAVEL_WH
+                schema: RAW
+                threads: 4
+          PROFILE
+
+      - name: dbt build (real, against Snowflake)
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt build
+
+      - name: Publish manifest.json as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbt-manifest
+          path: dbt/target/manifest.json
+          retention-days: 30

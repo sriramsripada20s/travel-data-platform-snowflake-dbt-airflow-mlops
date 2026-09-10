@@ -106,3 +106,48 @@ jobs:
 
       - name: Run unit tests
         run: pytest tests/unit/ -v  
+
+  dbt-slim-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-snowflake
+
+      - name: Write profile from secrets
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << PROFILE
+          travel_experience_platform:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ACCOUNTADMIN
+                database: TRAVEL_PLATFORM
+                warehouse: TRAVEL_WH
+                schema: RAW
+                threads: 4
+          PROFILE
+
+      - name: Download production manifest
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: dbt-manifest.yml
+          branch: main
+          name: dbt-manifest
+          path: dbt/state
+
+      - name: dbt build (state:modified+ only, deferred)
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt build --select state:modified+ --defer --state ./state
