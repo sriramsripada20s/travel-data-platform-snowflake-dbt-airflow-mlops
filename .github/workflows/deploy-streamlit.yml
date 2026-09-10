@@ -10,7 +10,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment:
+      name: production
+      url: https://app.snowflake.com/ap-northeast-2.aws/vc93087/#/streamlit-apps/TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD
     env:
       # snowflake-cli-labs reads these SNOWFLAKE_* env vars directly --
       # no connections.toml file needed in a headless CI environment.
