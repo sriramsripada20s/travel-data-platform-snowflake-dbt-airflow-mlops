@@ -58,43 +58,42 @@ select
     e.experience_name,
     e.city,
     e.category,
-    
+
     -- Date Dimension (Fall back to availability date if no bookings occurred)
-    coalesce(b.experience_date, a.experience_date) as experience_date,
-    
+    b.avg_lead_time_days,
+
     -- Booking Volume Metrics (COALESCE replaces NULL with 0 for quiet days)
+    a.total_capacity,
+    a.available_capacity,
+    coalesce(b.experience_date, a.experience_date) as experience_date,
     coalesce(b.total_bookings, 0) as total_bookings,
     coalesce(b.confirmed_bookings, 0) as confirmed_bookings,
     coalesce(b.cancelled_bookings, 0) as cancelled_bookings,
     coalesce(b.refunded_bookings, 0) as refunded_bookings,
     coalesce(b.total_guests, 0) as total_guests,
+
+    -- Inventory Capacity Metrics
     coalesce(b.total_booking_amount, 0) as total_booking_amount,
     coalesce(b.confirmed_booking_amount, 0) as confirmed_booking_amount,
-    b.avg_lead_time_days,
-    
-    -- Inventory Capacity Metrics
-    a.total_capacity,
-    a.available_capacity,
-    
+
     -- DERIVED KPI 1: Utilization Rate (Booked Slots / Total Slots)
     case
         when a.total_capacity > 0
             then round((a.total_capacity - a.available_capacity) / a.total_capacity, 4)
-        else null
     end as utilization_rate,
-    
+
     -- DERIVED KPI 2: Cancellation Rate (Cancelled Bookings / Total Bookings)
     case
         when coalesce(b.total_bookings, 0) > 0
             then round(coalesce(b.cancelled_bookings, 0) / b.total_bookings, 4)
-        else null
     end as cancellation_rate
 
-from experiences e
+from experiences as e
 -- INNER JOIN guarantees every experience row has matching inventory availability
-inner join daily_availability a 
+inner join daily_availability as a
     on e.experience_id = a.experience_id
 -- LEFT JOIN ensures days with 0 bookings still show up with 0s rather than vanishing
-left join daily_bookings b
-    on e.experience_id = b.experience_id
-    and a.experience_date = b.experience_date
+left join daily_bookings as b
+    on
+        e.experience_id = b.experience_id
+        and a.experience_date = b.experience_date

@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install lint tools
+        run: pip install ruff sqlfluff
+
+      - name: Lint Python (ruff)
+        run: ruff check src/ ml/ airflow/dags/ streamlit_app/
+
+      - name: Lint dbt SQL (sqlfluff)
+        run: sqlfluff lint dbt/models/ --dialect snowflake
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dbt-parse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-snowflake
+
+      - name: Write a dummy profile (no real connection needed for parse)
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << 'PROFILE'
+          travel_experience_platform:
+            target: ci
+            outputs:
+              ci:
+                type: snowflake
+                account: dummy
+                user: dummy
+                password: dummy
+                role: dummy
+                database: dummy
+                warehouse: dummy
+                schema: dummy
+                threads: 1
+          PROFILE
+
+      - name: dbt parse
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt parse
+
+  docker-build-and-dag-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the Airflow image
+        working-directory: airflow
+        run: docker build -t travel-platform-airflow:ci .
+
+      - name: Run DAG integrity tests inside the built image
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/airflow/dags:/opt/airflow/dags" \
+            -v "${{ github.workspace }}/tests:/opt/airflow/tests" \
+            travel-platform-airflow:ci \
+            bash -c "pip install pytest && python -m pytest /opt/airflow/tests/airflow/ -v"

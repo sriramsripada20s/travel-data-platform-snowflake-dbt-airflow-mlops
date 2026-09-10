@@ -28,20 +28,20 @@ booking_agg as (
     select
         customer_id,
         count(*) as total_bookings,
-        
+
         -- Status counts
         count_if(booking_status = 'CONFIRMED') as confirmed_bookings,
         count_if(booking_status = 'CANCELLED') as cancelled_bookings,
         count_if(booking_status = 'REFUNDED') as refunded_bookings,
-        
+
         -- Lifetime Value (LTV) metrics
         sum(booking_amount) as lifetime_booking_amount,
         sum(case when booking_status = 'CONFIRMED' then booking_amount else 0 end) as lifetime_confirmed_amount,
-        
+
         -- First and most recent booking timestamps
         min(booking_timestamp) as first_booking_at,
         max(booking_timestamp) as last_booking_at
-        
+
     from bookings
     -- Exclude missing customer IDs (~101 raw rows) so we don't group bad rows together
     where customer_id is not null
@@ -69,28 +69,28 @@ select
     c.country,
     c.acquisition_channel,
     c.customer_segment,
-    
+
     -- Booking Summaries (COALESCE replaces NULL with 0 for customers with 0 bookings)
+    b.first_booking_at,
+    b.last_booking_at,
+    s.first_event_at,
+    s.last_event_at,
     coalesce(b.total_bookings, 0) as total_bookings,
     coalesce(b.confirmed_bookings, 0) as confirmed_bookings,
     coalesce(b.cancelled_bookings, 0) as cancelled_bookings,
     coalesce(b.refunded_bookings, 0) as refunded_bookings,
+
+    -- Web Behavior Summaries (COALESCE replaces NULL with 0 for users with 0 events)
     coalesce(b.lifetime_booking_amount, 0) as lifetime_booking_amount,
     coalesce(b.lifetime_confirmed_amount, 0) as lifetime_confirmed_amount,
-    b.first_booking_at,
-    b.last_booking_at,
-    
-    -- Web Behavior Summaries (COALESCE replaces NULL with 0 for users with 0 events)
     coalesce(s.total_sessions, 0) as total_sessions,
     coalesce(s.search_events, 0) as search_events,
     coalesce(s.purchase_events, 0) as purchase_events,
-    s.first_event_at,
-    s.last_event_at,
-    
-    -- Derived Business Flag: TRUE if the customer has made more than 1 booking
-    case when coalesce(b.total_bookings, 0) > 1 then true else false end as is_repeat_booker
 
-from customers c
+    -- Derived Business Flag: TRUE if the customer has made more than 1 booking
+    coalesce(coalesce(b.total_bookings, 0) > 1, false) as is_repeat_booker
+
+from customers as c
 -- LEFT JOIN ensures customers who signed up but haven't booked/browsed are still kept
-left join booking_agg b on c.customer_id = b.customer_id
-left join session_agg s on c.customer_id = s.customer_id
+left join booking_agg as b on c.customer_id = b.customer_id
+left join session_agg as s on c.customer_id = s.customer_id

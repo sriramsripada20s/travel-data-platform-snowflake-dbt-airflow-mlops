@@ -23,7 +23,7 @@ select
     b.booking_status,
     'INVALID_EXPERIENCE_FK' as orphan_reason,
     current_timestamp() as flagged_at
-from bookings b
-left join experiences e 
+from bookings as b
+left join experiences as e
     on b.experience_id = e.experience_id
 where e.experience_id is null

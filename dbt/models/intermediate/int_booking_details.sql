@@ -34,7 +34,7 @@ enriched_bookings as (
         b.experience_id,
         b.booking_timestamp,
         b.experience_date,
-        
+
         -- Transaction & Pricing Attributes
         b.number_of_guests,
         b.ticket_price,
@@ -42,7 +42,7 @@ enriched_bookings as (
         b.booking_amount,
         b.booking_channel,
         b.currency,
-        
+
         -- Business Rules & ML Feature Inputs
         b.lead_time_days,
         b.discount_pct,
@@ -63,12 +63,12 @@ enriched_bookings as (
         s.supplier_type,
         s.commission_rate
 
-    from bookings b
+    from bookings as b
     -- INNER JOIN ensures only bookings matching valid experience catalog items flow through
-    inner join experiences e 
+    inner join experiences as e
         on b.experience_id = e.experience_id
     -- INNER JOIN links experiences to their contract supplier
-    inner join suppliers s 
+    inner join suppliers as s
         on e.supplier_id = s.supplier_id
 )
 

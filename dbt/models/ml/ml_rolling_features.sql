@@ -1,6 +1,7 @@
 with base as (
     select * from {{ ref('ml_base_features') }}
 ),
+
 daily_metrics as (
     select * from {{ ref('int_experience_daily_metrics') }}
 )
@@ -29,7 +30,8 @@ select
     row_number() over (
         partition by b.experience_id order by b.feature_date
     ) - 1 as days_of_prior_history
-from base b
-join daily_metrics dm
-    on b.experience_id = dm.experience_id
-    and b.feature_date = dm.experience_date
+from base as b
+inner join daily_metrics as dm
+    on
+        b.experience_id = dm.experience_id
+        and b.feature_date = dm.experience_date

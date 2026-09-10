@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pandas as pd
 
 from .config import (
     END_DATE,
@@ -33,7 +32,7 @@ RAW_DIR = Path("data/generated/raw")
 
 
 def main() -> None:
-    print(f"Phase 1 — full generation run")
+    print("Phase 1 — full generation run")
     print(f"SCALE_FACTOR={SCALE_FACTOR}  RANDOM_SEED={RANDOM_SEED}")
     print(f"suppliers={NUM_SUPPLIERS}  experiences={NUM_EXPERIENCES}  customers={NUM_CUSTOMERS}\n")
 

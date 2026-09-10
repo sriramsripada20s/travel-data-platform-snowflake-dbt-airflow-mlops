@@ -17,6 +17,5 @@ select
     case
         when total_capacity > 0
             then round((total_capacity - available_capacity) / total_capacity, 4)
-        else null
     end as utilization_rate
 from availability
