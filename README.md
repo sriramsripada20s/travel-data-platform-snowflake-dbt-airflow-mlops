@@ -1,8 +1,8 @@
-# Travel Experience Data & ML Intelligence Platform Using Snowflake, dbt, Airflow, MLOPs
+# Travel Experience Data & ML Intelligence Platform Using Snowflake, dbt, Airflow, Machine Learning, CI/CD
 
-An end-to-end **Data Engineering, Analytics Engineering, Machine Learning, and MLOps project** inspired by modern online travel-experience marketplaces.
+An end-to-end **data engineering, analytics engineering, machine learning, and MLOps platform** for a travel-experience marketplace — built on **Snowflake, dbt, Apache Airflow 3.x, and Python**, with a fully automated CI/CD pipeline and a live analytics dashboard.
 
-Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Learning, MLOps, Docker, and Slack** work together in a realistic data platform — not as isolated tutorials, but as one connected system where each phase's output becomes the next phase's input.
+The platform ingests marketplace activity daily, transforms it through a tested dimensional model, forecasts booking demand, and orchestrates the entire lifecycle end to end — from raw data landing in S3 to a champion/challenger ML model making real promotion decisions, with every stage validated by automated tests and deployed through GitHub Actions.
 
 ---
 
@@ -18,12 +18,8 @@ Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Le
 | 5 — ML feature engineering | ✅ Done | Leakage-safe rolling-window features, split into 4 focused dbt models |
 | 6 — Baseline + demand forecasting model | ✅ Done | 3-algorithm comparison (XGBoost, Random Forest, Ridge) — see Machine Learning section for the honest result |
 | 7 — Airflow 3.x orchestration | ✅ Done | Two DAGs, deployed via Docker Compose, verified end to end including a real champion/challenger decision |
-| 8 — MLOps | 🔶 Partial | Champion/challenger promotion gate exists and has been tested with a real rejection; live drift monitoring over time does not exist yet |
-| 9 — Docker / productionization | 🔶 Partial | Airflow itself is fully containerized; dbt/ML/generator code still runs directly on the host |
-| 10 — Slack alerting | ✅ Mostly done | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7, rather than as a separate later phase |
-| Secondary ML use case — cancellation prediction | ⏳ Deprioritized | Deliberate scope decision in favor of demand forecasting, not an oversight |
-| Bonus — Prometheus + Grafana, CI/CD | ⏳ Not started | |.
-
+| 8 — CI/CD | ✅ Done | CI: 6 automated checks + enforced branch protection, proven end-to-end. CD: dbt docs auto-published to GitHub Pages, Streamlit dashboard auto-deployed to Snowflake, both on every merge to `main` |
+| 9 — Slack alerting | ✅ Done | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7
 
 **Airflow DAG Pipeline: showing a successful `travel_platform_daily_pipeline` run (all green).**
 
@@ -31,7 +27,7 @@ Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Le
 
 ---
 
-🎥*Watch Project Video Below for demonstration* 
+🎥 *Watch Project Video Below for demonstration*
 *https://github.com/sriramsripada20s/travel-data-platform-snowflake-dbt-airflow-mlops/issues/1*
 
 ## Project Goal
@@ -147,13 +143,11 @@ This project builds the data platform needed to answer those questions — and a
                                             |                                       |
                                             v                                       v
                                     Slack Alerts                          Predictions (planned)
-
-
-
 ```
 
-📸 *<img width="1876" height="900" alt="image" src="https://github.com/user-attachments/assets/4b44a64b-007b-40fa-96ff-05cee01d5605" />: the Streamlit dashboard (all 6 charts) here — this is the strongest single visual proof-point in this project.*
-📸 *<img width="1905" height="906" alt="image" src="https://github.com/user-attachments/assets/56b307b5-fd52-468b-9d56-0b13aeb8672d" />*
+📸 *The Streamlit dashboard (all 6 charts) — the strongest single visual proof-point in this project.*
+<img width="1876" height="900" alt="image" src="https://github.com/user-attachments/assets/4b44a64b-007b-40fa-96ff-05cee01d5605" />
+<img width="1905" height="906" alt="image" src="https://github.com/user-attachments/assets/56b307b5-fd52-468b-9d56-0b13aeb8672d" />
 
 ## Business KPIs
 
@@ -171,18 +165,14 @@ The analytics layer was built and validated before ML was introduced, so the und
 
 ---
 
-
-**Future observability layer (not yet built):**
+**Delivery workflow — CI and CD both built:**
 ```text
-Airflow / Platform Metrics -> Prometheus -> Grafana
+GitHub -> GitHub Actions (CI: lint, secrets scan, dbt parse, DAG tests, unit tests, dbt Slim CI)
+       -> Branch protection (enforced, verified end-to-end)
+       -> merge to main
+       -> GitHub Actions (CD): dbt docs -> GitHub Pages
+                              Streamlit dashboard -> Snowflake (auto-deployed via Snowflake CLI)
 ```
-
-**Future delivery workflow (not yet built):**
-```text
-GitHub -> GitHub Actions -> Tests / Validation -> CI/CD
-```
-
----
 
 ---
 
@@ -196,13 +186,11 @@ GitHub -> GitHub Actions -> Tests / Validation -> CI/CD
 | **dbt** | Data modeling, transformations, testing, documentation, lineage |
 | **Apache Airflow 3.x** | Workflow orchestration — two DAGs, scheduling, dependencies, retries, monitoring |
 | **scikit-learn / XGBoost** | Machine learning model development |
-| **MLOps (in progress)** | Champion/challenger evaluation, versioning, promotion — live monitoring not yet built |
 | **Docker** | Containerized Airflow deployment (Postgres, webserver, scheduler, DAG processor) |
 | **Streamlit** | Live analytics dashboard, hosted natively in Snowflake |
 | **Slack** | Pipeline failure alerts and end-of-run summaries |
 | **Git / GitHub** | Version control, documentation, portfolio hosting |
-| **Prometheus / Grafana** | Platform metrics — not yet built |
-| **GitHub Actions** | CI/CD — not yet built |
+| **GitHub Actions** | CI (6 checks, branch protection enforced) and CD (dbt docs → GitHub Pages, Streamlit auto-deploy) — both fully built and proven |
 
 ---
 
@@ -424,7 +412,6 @@ dbt/models/
         ├── ml_base_features.sql
         ├── ml_rolling_features.sql    (leakage-safe: every window excludes the current row)
         └── ml_demand_features.sql     (final, training-ready table)
-
 ```
 
 **No `analytics/` layer was built.** The original plan called for a fourth tier (`mart_booking_funnel.sql`, etc.) on top of marts — dropped after review: everything it would compute is already directly queryable from the marts, current dbt convention treats business-area marts as the final layer, and with one project and no competing BI consumers the abstraction wasn't earning its cost. See `docs/phase_3_summary.md`.
@@ -432,8 +419,6 @@ dbt/models/
 **`ml_cancellation_features.sql` was never built** — the secondary ML use case was deprioritized.
 
 67 tests total: 64 pass, 3 deliberate `WARN`s (documenting known injected defects), 0 unexpected failures.
-
----
 
 ---
 
@@ -463,6 +448,7 @@ Three algorithms trained and compared:
 
 **Honest finding, not just a leaderboard:** all three algorithms landed within 0.008 MAE of each other — statistically indistinguishable. Ridge, a purely linear model with no ability to learn interaction effects, tied with tree-based models that can. This indicates the relationship between the engineered features and booking demand is close to linear, dominated by an experience's own recent booking momentum (`bookings_prev_28d_avg` accounted for ~54% of feature importance in the XGBoost run) — the additional features (price, category, calendar context) add only marginal refinement. See `docs/phase_6_summary.md` for the full interpretation.
 
+---
 
 ## Airflow Orchestration — two DAGs, not one
 
@@ -487,8 +473,45 @@ train_model -> evaluate_model -> decide_promotion
 📸 *Airflow Connections page (`snowflake_default`, `aws_default`, `slack_default`)*
 <img width="1045" height="464" alt="image" src="https://github.com/user-attachments/assets/e43118b4-0aef-4791-9b2d-3e0338ac872b" />
 
-📸 *the Slack message reading "Weekly retrain complete. Candidate ridge (MAE 1.185) vs. champion (MAE 1.181). Promoted: False" — this is the single best proof-point that the MLOps gate makes real, correct decisions, not just runs successfully.*
+📸 *The Slack message reading "Weekly retrain complete. Candidate ridge (MAE 1.185) vs. champion (MAE 1.181). Promoted: False" — this is the single best proof-point that the MLOps gate makes real, correct decisions, not just runs successfully.*
 <img width="1399" height="743" alt="image" src="https://github.com/user-attachments/assets/18b361a6-0a0c-4a0c-9cb6-253937073aad" />
+
+---
+
+## CI/CD Pipeline
+
+### CI — six checks, enforced via branch protection
+
+Every pull request runs six automated checks, verified end-to-end with a real test PR showing the merge button disabled until all six passed:
+
+| Check | What it validates |
+|---|---|
+| `lint` | Python (`ruff`) + SQL (`sqlfluff`) — real bug patterns, not just style |
+| `secrets-scan` | No credentials ever committed (`gitleaks`) |
+| `dbt-parse` | Every dbt model compiles (dummy credentials, no live warehouse needed) |
+| `docker-build-and-dag-tests` | 10 DAG integrity tests, run **inside the real deployment image** — not just against a bare local Airflow install |
+| `unit-tests` | 25 tests covering the demand/cancellation formulas (`business_logic.py`) and the leakage-safe train/test split (`ml/data_loader.py`) |
+| `dbt-slim-ci` | `dbt build --select state:modified+ --defer` — only rebuilds/tests what actually changed in the PR, deferring everything unchanged to production's existing state, compared against a `manifest.json` published on every merge to `main` |
+
+### CD — dbt docs and the dashboard, both auto-deployed on merge
+
+Two independent, path-scoped workflows, authenticating via a dedicated `production` GitHub Environment (secrets scoped there, not at the repo level):
+
+| Workflow | Triggers on | Does |
+|---|---|---|
+| `deploy-docs.yml` | Changes to `dbt/` merged to `main` | `dbt docs generate` against real Snowflake, publishes the full lineage/catalog site to GitHub Pages |
+| `deploy-streamlit.yml` | Changes to `streamlit_app/` merged to `main` | `snow streamlit deploy --replace` — updates the existing `TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD` app in place (same URL every time, never a new object) |
+
+📊 **[Live dbt documentation & lineage](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/)** — auto-published on every merge to `main`.
+
+**Real issues this surfaced, root-caused rather than worked around** (full detail in `docs/phase_8_ci_summary.md`):
+- A YAML parsing failure from an unquoted Snowflake password containing a `*` character
+- `dagbag.get_dag()` requiring a live metadata database the test container didn't have — switched to `dagbag.dags[dag_id]`, the more architecturally correct approach for static checks
+- `dim_date.sql`'s `dbt_utils.date_spine()` being unresolvable by a credential-free SQL linter — documented and excluded rather than faked
+- A genuine Slim CI bootstrap ordering problem — nothing to compare against until the manifest-publishing workflow ran successfully once
+- The earlier Streamlit consolidation had silently dropped the Snowflake CLI project files (`snowflake.yml`, `pyproject.toml`) needed for automated deploys
+- `snowflake.yml`'s schema had fields from the newer container-runtime app model unsupported by the installed CLI version — simplified to the universally-supported field set
+- `snow` CLI's connection resolution needed `--temporary-connection` to use generic env vars directly in a headless CI environment, rather than looking for a named connection that doesn't exist there
 
 ---
 
@@ -532,22 +555,33 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │           └── state.py
 │
 ├── streamlit_app/
-│   ├── app.py                   (Streamlit-in-Snowflake, single source of truth)
+│   ├── streamlit_app.py         (Streamlit-in-Snowflake, single source of truth)
+│   ├── snowflake.yml            (Snowflake CLI project definition, used by deploy-streamlit.yml)
+│   ├── pyproject.toml           (dependency spec for the CLI deploy)
 │   └── environment.yml
 │
 ├── sql/
 │   ├── raw/ , state/
 │
+├── tests/
+│   ├── unit/                    (25 tests — business_logic.py, ml/data_loader.py)
+│   └── airflow/                 (10 DAG integrity tests, run inside the Docker image)
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                (6 jobs — see CI/CD Pipeline section)
+│       ├── dbt-manifest.yml      (publishes the Slim CI comparison manifest)
+│       ├── deploy-docs.yml       (dbt docs -> GitHub Pages, on merge)
+│       └── deploy-streamlit.yml  (dashboard -> Snowflake, on merge)
+│
 ├── docs/
 │   ├── phase_1_summary.md ... phase_7_summary.md
 │   ├── phase_7_troubleshooting_log.md
+│   ├── phase_8_ci_summary.md
 │   ├── data_contracts.md
 │   └── business_rules.md
 │
 ├── .gitignore
 └── README.md
 ```
-
----
-
 
