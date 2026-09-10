@@ -4,6 +4,17 @@ An end-to-end **data engineering, analytics engineering, machine learning, and M
 
 The platform ingests marketplace activity daily, transforms it through a tested dimensional model, forecasts booking demand, and orchestrates the entire lifecycle end to end — from raw data landing in S3 to a champion/challenger ML model making real promotion decisions, with every stage validated by automated tests and deployed through GitHub Actions.
 
+[![dbt Core](https://img.shields.io/badge/dbt--core-1.12-FF694A?style=flat&logo=dbt&logoColor=white)](https://www.getdbt.com/)
+[![Snowflake](https://img.shields.io/badge/Snowflake-Data%20Cloud-29B5E8?style=flat&logo=snowflake&logoColor=white)](https://www.snowflake.com/)
+[![Apache Airflow](https://img.shields.io/badge/Apache%20Airflow-3.x-017CEE?style=flat&logo=apacheairflow&logoColor=white)](https://airflow.apache.org/)
+[![AWS S3](https://img.shields.io/badge/AWS-S3-569A31?style=flat&logo=amazons3&logoColor=white)](https://aws.amazon.com/s3/)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?style=flat&logo=scikitlearn&logoColor=white)](https://scikit-learn.org/)
+[![XGBoost](https://img.shields.io/badge/XGBoost-ML-2B5B84?style=flat&logo=xgboost&logoColor=white)](https://xgboost.readthedocs.io/)
+[![Streamlit](https://img.shields.io/badge/Streamlit--in--Snowflake-Dashboard-FF4B4B?style=flat&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![GitHub Actions](https://img.shields.io/badge/GitHub%20Actions-CI%2FCD-2088FF?style=flat&logo=githubactions&logoColor=white)](https://github.com/features/actions)
+[![Slack](https://img.shields.io/badge/Slack-Alerting-4A154B?style=flat&logo=slack&logoColor=white)](https://slack.com/)
 ---
 
 ## Current Status
