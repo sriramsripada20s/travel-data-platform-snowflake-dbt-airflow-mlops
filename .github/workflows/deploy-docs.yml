@@ -1,0 +1,72 @@
+name: Deploy dbt Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dbt/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt
+        run: pip install dbt-core dbt-snowflake
+
+      - name: Write profile from secrets
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml << PROFILE
+          travel_experience_platform:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
+                user: "${{ secrets.SNOWFLAKE_USER }}"
+                password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
+                role: ACCOUNTADMIN
+                database: TRAVEL_PLATFORM
+                warehouse: TRAVEL_WH
+                schema: RAW
+                threads: 4
+          PROFILE
+
+      - name: Generate docs
+        working-directory: dbt
+        run: |
+          dbt deps
+          dbt docs generate
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dbt/target
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
