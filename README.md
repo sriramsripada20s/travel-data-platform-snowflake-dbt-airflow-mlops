@@ -18,11 +18,11 @@ Built to learn how **Python, SQL, Snowflake, dbt, Apache Airflow 3.x, Machine Le
 | 5 — ML feature engineering | ✅ Done | Leakage-safe rolling-window features, split into 4 focused dbt models |
 | 6 — Baseline + demand forecasting model | ✅ Done | 3-algorithm comparison (XGBoost, Random Forest, Ridge) — see Machine Learning section for the honest result |
 | 7 — Airflow 3.x orchestration | ✅ Done | Two DAGs, deployed via Docker Compose, verified end to end including a real champion/challenger decision |
-| 8 — MLOps | 🔶 Partial | Champion/challenger promotion gate exists and has been tested with a real rejection; live drift monitoring over time does not exist yet |
+| 8 — CI/CD | 🔶 Partial | CI fully built and proven (6 automated checks + enforced branch protection, all tested end-to-end); CD (dbt docs publishing, Streamlit auto-deploy) not yet built |
 | 9 — Docker / productionization | 🔶 Partial | Airflow itself is fully containerized; dbt/ML/generator code still runs directly on the host |
 | 10 — Slack alerting | ✅ Mostly done | Built into both DAGs (failure callback + end-of-run summary) as part of Phase 7, rather than as a separate later phase |
 | Secondary ML use case — cancellation prediction | ⏳ Deprioritized | Deliberate scope decision in favor of demand forecasting, not an oversight |
-| Bonus — Prometheus + Grafana, CI/CD | ⏳ Not started | |.
+| Bonus — Prometheus + Grafana | ⏳ Not started | |
 
 
 **Airflow DAG Pipeline: showing a successful `travel_platform_daily_pipeline` run (all green).**
@@ -177,8 +177,13 @@ The analytics layer was built and validated before ML was introduced, so the und
 Airflow / Platform Metrics -> Prometheus -> Grafana
 ```
 
-**Future delivery workflow (not yet built):**
+**Delivery workflow — CI built, CD not yet:**
 ```text
+GitHub -> GitHub Actions (CI: lint, secrets scan, dbt parse, DAG tests, unit tests, dbt Slim CI)
+       -> Branch protection (enforced, verified end-to-end)
+       -> [CD: dbt docs publishing + Streamlit auto-deploy -- planned, not yet built]
+``````text
+
 GitHub -> GitHub Actions -> Tests / Validation -> CI/CD
 ```
 
@@ -196,13 +201,11 @@ GitHub -> GitHub Actions -> Tests / Validation -> CI/CD
 | **dbt** | Data modeling, transformations, testing, documentation, lineage |
 | **Apache Airflow 3.x** | Workflow orchestration — two DAGs, scheduling, dependencies, retries, monitoring |
 | **scikit-learn / XGBoost** | Machine learning model development |
-| **MLOps (in progress)** | Champion/challenger evaluation, versioning, promotion — live monitoring not yet built |
 | **Docker** | Containerized Airflow deployment (Postgres, webserver, scheduler, DAG processor) |
 | **Streamlit** | Live analytics dashboard, hosted natively in Snowflake |
 | **Slack** | Pipeline failure alerts and end-of-run summaries |
 | **Git / GitHub** | Version control, documentation, portfolio hosting |
-| **Prometheus / Grafana** | Platform metrics — not yet built |
-| **GitHub Actions** | CI/CD — not yet built |
+| **GitHub Actions** | CI fully built (6 checks, branch protection enforced) — CD not yet built |
 
 ---
 
@@ -491,6 +494,40 @@ train_model -> evaluate_model -> decide_promotion
 <img width="1399" height="743" alt="image" src="https://github.com/user-attachments/assets/18b361a6-0a0c-4a0c-9cb6-253937073aad" />
 
 ---
+## CI/CD Pipeline
+
+### CI — built, tested end-to-end
+
+Six automated checks run on every pull request, enforced via GitHub branch
+protection (verified with a real test PR showing the merge button
+disabled until every check passed):
+
+| Check | What it validates |
+|---|---|
+| `lint` | Python (`ruff`) + SQL (`sqlfluff`) — real bug patterns, not just style |
+| `secrets-scan` | No credentials ever committed (`gitleaks`) |
+| `dbt-parse` | Every dbt model compiles (dummy credentials, no live warehouse needed) |
+| `docker-build-and-dag-tests` | 10 DAG integrity tests, run **inside the real deployment image** — not just against a bare local Airflow install |
+| `unit-tests` | 25 tests covering the demand/cancellation formulas (`business_logic.py`) and the leakage-safe train/test split (`ml/data_loader.py`) |
+| `dbt-slim-ci` | `dbt build --select state:modified+ --defer` — only rebuilds/tests what actually changed in the PR, deferring everything unchanged to production's existing state, compared against a `manifest.json` published by a separate workflow on every merge to `main` |
+
+## CI/CD Pipeline
+
+### CI — built, tested end-to-end
+
+Six automated checks run on every pull request, enforced via GitHub branch
+protection (verified with a real test PR showing the merge button
+disabled until every check passed):
+
+| Check | What it validates |
+|---|---|
+| `lint` | Python (`ruff`) + SQL (`sqlfluff`) — real bug patterns, not just style |
+| `secrets-scan` | No credentials ever committed (`gitleaks`) |
+| `dbt-parse` | Every dbt model compiles (dummy credentials, no live warehouse needed) |
+| `docker-build-and-dag-tests` | 10 DAG integrity tests, run **inside the real deployment image** — not just against a bare local Airflow install |
+| `unit-tests` | 25 tests covering the demand/cancellation formulas (`business_logic.py`) and the leakage-safe train/test split (`ml/data_loader.py`) |
+| `dbt-slim-ci` | `dbt build --select state:modified+ --defer` — only rebuilds/tests what actually changed in the PR, deferring everything unchanged to production's existing state, compared against a `manifest.json` published by a separate workflow on every merge to `main` |
+
 
 ## Repository Structure — as actually built
 
@@ -538,15 +575,16 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 ├── sql/
 │   ├── raw/ , state/
 │
-├── docs/
-│   ├── phase_1_summary.md ... phase_7_summary.md
-│   ├── phase_7_troubleshooting_log.md
-│   ├── data_contracts.md
-│   └── business_rules.md
+├── tests/
+│   ├── unit/                    (25 tests — business_logic.py, ml/data_loader.py)
+│   └── airflow/                 (10 DAG integrity tests, run inside the Docker image)
 │
-├── .gitignore
-└── README.md
-```
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                (6 jobs — see CI/CD Pipeline section)
+│       └── dbt-manifest.yml      (publishes the Slim CI comparison manifest)
+│
+├── docs/
 
 ---
 
