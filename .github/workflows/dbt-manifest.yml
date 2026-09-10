@@ -5,7 +5,9 @@ on:
     branches: [main]
     paths:
       - "dbt/**"
-  workflow_dispatch:
+  workflow_dispatch: # lets you manually trigger this from the Actions UI,
+                       # without needing a real dbt/ change first -- exactly
+                       # what's needed to produce the very first manifest
 
 jobs:
   build-and-publish-manifest:
