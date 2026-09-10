@@ -1,0 +1,10 @@
+# dim_date.sql uses dbt_utils.date_spine(), a real dbt package macro.
+# Our sqlfluff setup deliberately uses the jinja templater (not the dbt
+# templater) to avoid needing live Snowflake credentials in CI -- but that
+# means it has no way to resolve namespaced dbt package macros like this
+# one; it's not a bug in the file, it's a fundamental limitation of
+# linting dbt SQL without a real dbt connection. This file's actual
+# correctness is verified by `dbt build`/`dbt test` against real Snowflake
+# (see docs/phase_3_summary.md), which is the check that actually matters
+# here -- excluding it from sqlfluff rather than fighting the templater.
+dbt/models/marts/dim_date.sql
