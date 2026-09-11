@@ -25,6 +25,7 @@ from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from airflow.sdk import Asset, dag, task
 
+#Declaring Assets  
 RAW_AVAILABILITY_ASSET = Asset("snowflake://TRAVEL_PLATFORM/RAW/RAW_AVAILABILITY")
 RAW_BOOKINGS_ASSET = Asset("snowflake://TRAVEL_PLATFORM/RAW/RAW_BOOKINGS")
 RAW_WEB_EVENTS_ASSET = Asset("snowflake://TRAVEL_PLATFORM/RAW/RAW_WEB_EVENTS")
@@ -146,20 +147,54 @@ def travel_platform_daily_pipeline():
               f"{len(bookings_df)} bookings, {len(events_df)} web events for {target_date}.")
         return target_date.isoformat()  # -> XCom automatically (TaskFlow)
 
+    # ------------------------------------------------------------------------
+    # STEP 2: PRE-UPLOAD QUALITY GATE
+    # ------------------------------------------------------------------------
     @task
     def validate_data(target_date: str) -> str:
-        """DATA-QUALITY GATE #1 -- before anything uploads. Raising here
-        fails the task, respecting retries/trigger rules downstream."""
+        """
+        DATA-QUALITY GATE #1 (Pre-Upload Ingestion Guardrail):
+        Validates all three generated CSV files (bookings, availability, web_events)
+        prior to staging in S3. Raising an assertion error halts the pipeline 
+        immediately, preventing corrupted data from loading into raw Snowflake tables.
+        """
         import pandas as pd
         from pathlib import Path
 
+        # Resolve local output directory for the target execution date
         out_dir = Path(f"/opt/airflow/data/generated/incremental/dt={target_date}")
-        bookings = pd.read_csv(out_dir / "bookings.csv")
 
+        # 1. Validate Bookings Dataset
+        bookings = pd.read_csv(out_dir / "bookings.csv")
         if not bookings.empty:
+            # Financial check: ensures booking dollar values are non-negative
             assert (bookings["booking_amount"] >= 0).all(), "Negative booking_amount in generated data"
+            # Primary key integrity check: ensures booking IDs are unique
             assert bookings["booking_id"].is_unique, "Duplicate booking_id in generated data"
 
+        # 2. Validate Inventory Availability Dataset
+        availability = pd.read_csv(out_dir / "availability.csv")
+        if not availability.empty:
+            # Capacity logical check: available seats can never exceed total slot capacity
+            assert (availability["available_capacity"] <= availability["total_capacity"]).all(), \
+                "available_capacity exceeds total_capacity in generated data"
+            # Capacity boundary check: total capacity must be non-negative
+            assert (availability["total_capacity"] >= 0).all(), "Negative total_capacity in generated data"
+
+        # 3. Validate Web Clickstream Events Dataset
+        web_events = pd.read_csv(out_dir / "web_events.csv")
+        if not web_events.empty:
+            # Domain enum check: event_type must belong to the approved funnel stages
+            valid_event_types = {
+                "SEARCH", "VIEW_EXPERIENCE", "CHECK_AVAILABILITY",
+                "ADD_TO_CART", "CHECKOUT", "PURCHASE",
+            }
+            assert web_events["event_type"].isin(valid_event_types).all(), \
+                "Invalid event_type found in generated data"
+            # Null check: every clickstream record must be tied to a valid session ID
+            assert web_events["session_id"].notna().all(), "Null session_id found in generated data"
+
+        # Pass target_date to downstream S3 staging tasks via XCom
         return target_date
 
     @task
