@@ -38,3 +38,21 @@ jobs:
       - name: Deploy to Snowflake
         working-directory: streamlit_app
         run: snow streamlit deploy --replace --temporary-connection
+
+      - name: Notify Slack on successful deploy
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": ":rocket: *Deployed to production*\nStreamlit dashboard updated (TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD)\nCommit: \"'"${{ github.event.head_commit.message }}"'\" by '"${{ github.actor }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"
+            }' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": ":rotating_light: *CD failed: deploy-streamlit*\nCommit: \"'"${{ github.event.head_commit.message }}"'\" by '"${{ github.actor }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"
+            }' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"

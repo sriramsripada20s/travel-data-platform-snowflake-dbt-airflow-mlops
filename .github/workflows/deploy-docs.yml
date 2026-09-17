@@ -70,3 +70,21 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Notify Slack on successful deploy
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": ":rocket: *Deployed to production*\ndbt docs published to GitHub Pages\nCommit: \"'"${{ github.event.head_commit.message }}"'\" by '"${{ github.actor }}"'\nLive site: ${{ steps.deployment.outputs.page_url }}\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"
+            }' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": ":rotating_light: *CD failed: deploy-docs*\nCommit: \"'"${{ github.event.head_commit.message }}"'\" by '"${{ github.actor }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"
+            }' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
