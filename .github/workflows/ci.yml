@@ -25,6 +25,20 @@ jobs:
       - name: Lint dbt SQL (sqlfluff)
         run: sqlfluff lint dbt/models/ --dialect snowflake
 
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *lint* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *lint* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +50,20 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *secrets-scan* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *secrets-scan* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   dbt-parse:
     runs-on: ubuntu-latest
@@ -74,6 +102,20 @@ jobs:
           dbt deps
           dbt parse
 
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *dbt-parse* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *dbt-parse* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
   docker-build-and-dag-tests:
     runs-on: ubuntu-latest
     steps:
@@ -91,6 +133,20 @@ jobs:
             travel-platform-airflow:ci \
             bash -c "pip install pytest && python -m pytest /opt/airflow/tests/airflow/ -v"
 
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *docker-build-and-dag-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *docker-build-and-dag-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
   unit-tests:
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +162,20 @@ jobs:
 
       - name: Run unit tests
         run: pytest tests/unit/ -v  
+
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *unit-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *unit-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   dbt-slim-ci:
     runs-on: ubuntu-latest
@@ -151,3 +221,17 @@ jobs:
         run: |
           dbt deps
           dbt build --select state:modified+ --defer --state ./state
+
+      - name: Notify Slack on success
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":white_check_mark: CI passed: *dbt-slim-ci* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+      - name: Notify Slack on failure
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":rotating_light: CI failed: *dbt-slim-ci* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
