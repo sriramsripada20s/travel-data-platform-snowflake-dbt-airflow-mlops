@@ -462,6 +462,8 @@ Every pull request runs six automated checks, verified end-to-end with a real te
 | `unit-tests` | 25 tests covering the demand/cancellation formulas (`business_logic.py`) and the leakage-safe train/test split (`ml/data_loader.py`) |
 | `dbt-slim-ci` | `dbt build --select state:modified+ --defer` — only rebuilds/tests what actually changed in the PR, deferring everything unchanged to production's existing state, compared against a `manifest.json` published on every merge to `main` |
 
+<img width="1728" height="670" alt="image" src="https://github.com/user-attachments/assets/3570157d-47ab-49d6-9867-80c7569fee0a" />
+
 ### CD — dbt docs and the dashboard, both auto-deployed on merge
 
 Two independent, path-scoped workflows, authenticating via a dedicated `production` GitHub Environment (secrets scoped there, not at the repo level):
@@ -472,6 +474,7 @@ Two independent, path-scoped workflows, authenticating via a dedicated `producti
 | `deploy-streamlit.yml` | Changes to `streamlit_app/` merged to `main` | `snow streamlit deploy --replace` — updates the existing `TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD` app in place (same URL every time, never a new object) |
 
 📊 **[Live dbt documentation & lineage](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/)** — auto-published on every merge to `main`.
+
 
 ## Repository Structure — as actually built
 
