@@ -1,0 +1,22 @@
+name: Merge Notification
+
+# Fires on every merge to main -- separate from ci.yml (which only runs
+# on pull_request now) and separate from the CD workflows (which deploy
+# and send their own release-specific notifications). This one job's
+# only purpose: confirm the merge happened and signal that CD is about
+# to start.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack of merge to main
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{
+              "text": ":twisted_rightwards_arrows: Merged to *main*: \"'"${{ github.event.head_commit.message }}"'\" by '"${{ github.actor }}"'\nCommit: https://github.com/'"${{ github.repository }}"'/commit/'"${{ github.sha }}"'\nCD process starting..."
+            }' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
