@@ -185,7 +185,7 @@ jobs:
           pip install pytest pandas python-dotenv snowflake-connector-python
 
       - name: Run unit tests
-        run: pytest tests/unit/ -v  
+        run: pytest tests/unit/ -v
 
       - name: Notify Slack on success
         if: success()
