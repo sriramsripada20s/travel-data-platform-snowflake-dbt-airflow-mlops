@@ -34,6 +34,12 @@ models:
       - name: experience_id
         description: "Primary key for experiences."
         tests: [unique, not_null]
+      - name: rating
+        description: "Average customer rating for the experience, 1-5 scale."
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 and <= 5"
 
       - name: supplier_id
         description: "Foreign key linking experience to its operating supplier."
