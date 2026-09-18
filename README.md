@@ -512,7 +512,9 @@ Once a PR passes all CI checks and merges into `main`, path-scoped CD workflows 
 ### 📊 Live Artifacts & Documentation
 
 * **Data Catalog & Lineage Graph:** 🔗 [View Live dbt Documentation](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/) *(Auto-updated on every merge touching `dbt/`)*
-* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit-in-Snowflake (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`), auto-deployed on every merge touching `streamlit_app/`.
+* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit-in-Snowflake (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`), auto-deployed on every merge touching `streamlit_app/`.## Repository Structure — as actually built
+
+```
 
 ## Repository Structure — as actually built
 
@@ -596,6 +598,3 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │
 ├── .gitignore
 ```
-└── README.md
-```
-
