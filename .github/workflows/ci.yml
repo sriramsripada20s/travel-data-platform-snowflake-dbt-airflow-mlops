@@ -200,7 +200,7 @@ jobs:
                 user: "${{ secrets.SNOWFLAKE_USER }}"
                 password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
                 role: ACCOUNTADMIN
-                database: TRAVEL_PLATFORM
+                database: TRAVEL_PLATFORM_STAGING
                 warehouse: TRAVEL_WH
                 schema: RAW
                 threads: 4
