@@ -3,10 +3,10 @@
 -- PURPOSE: Enriches clean bookings with full experience and supplier metadata.
 -- ============================================================================
 -- DATA QUALITY GUARDRAIL:
--- Uses an INNER JOIN against `stg_experiences`. This explicitly excludes the 51 
--- orphaned-FK bookings generated in Phase 1. 
+-- Uses an INNER JOIN against `stg_experiences`. This explicitly excludes the 51
+-- orphaned-FK bookings generated in Phase 1.
 --
--- Those 51 bad rows are captured separately in `int_orphaned_bookings.sql` to 
+-- Those 51 bad rows are captured separately in `int_orphaned_bookings.sql` to
 -- maintain 100% financial auditability without corrupting downstream joins.
 -- ============================================================================
 

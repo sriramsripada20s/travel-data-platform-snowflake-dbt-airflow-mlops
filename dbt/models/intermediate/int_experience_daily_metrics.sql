@@ -3,8 +3,8 @@
 -- PURPOSE: One row per experience + date, summarizing demand and utilization.
 -- ============================================================================
 -- DATA INTEGRITY NOTE:
--- Built from `int_booking_details` (not `stg_bookings`). The 51 orphaned-FK 
--- bookings are already excluded here, ensuring revenue and booking counts 
+-- Built from `int_booking_details` (not `stg_bookings`). The 51 orphaned-FK
+-- bookings are already excluded here, ensuring revenue and booking counts
 -- strictly match our valid experience catalog.
 -- ============================================================================
 
