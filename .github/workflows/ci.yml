@@ -5,6 +5,26 @@ on:
     branches: [main]
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      dbt: ${{ steps.filter.outputs.dbt }}
+      python: ${{ steps.filter.outputs.python }}
+      airflow: ${{ steps.filter.outputs.airflow }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            dbt:
+              - 'dbt/**'
+            python:
+              - 'src/**'
+              - 'ml/**'
+            airflow:
+              - 'airflow/**'
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -64,6 +84,8 @@ jobs:
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   dbt-parse:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dbt == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -115,6 +137,8 @@ jobs:
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   docker-build-and-dag-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.airflow == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +170,8 @@ jobs:
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   unit-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -176,6 +202,8 @@ jobs:
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
   dbt-slim-ci:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.dbt == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
