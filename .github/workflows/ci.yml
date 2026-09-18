@@ -136,30 +136,19 @@ jobs:
       - name: Install dbt core & Snowflake adapter
         run: pip install dbt-core dbt-snowflake
 
-      - name: Configure dummy dbt profile (No database connection needed)
-        run: |
-          mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << 'PROFILE'
-          travel_experience_platform:
-            target: ci
-            outputs:
-              ci:
-                type: snowflake
-                account: dummy
-                user: dummy
-                password: dummy
-                role: dummy
-                database: dummy
-                warehouse: dummy
-                schema: dummy
-                threads: 1
-          PROFILE
-
       - name: Install dbt dependencies & verify syntax
         working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+          # dbt parse only checks Jinja/SQL syntax -- no real connection
+          # needed. These placeholders just satisfy env_var() calls in
+          # the shared dbt/profiles.yml so it renders without error.
+          SNOWFLAKE_ACCOUNT: dummy
+          SNOWFLAKE_USER: dummy
+          SNOWFLAKE_PASSWORD: dummy
         run: |
           dbt deps
-          dbt parse
+          dbt parse --target dev
 
       - name: Send Slack alert on success
         if: success()
@@ -279,25 +268,6 @@ jobs:
       - name: Install dbt core & Snowflake adapter
         run: pip install dbt-core dbt-snowflake
 
-      - name: Write profile from secrets
-        run: |
-          mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << PROFILE
-          travel_experience_platform:
-            target: staging
-            outputs:
-              staging:
-                type: snowflake
-                account: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
-                user: "${{ secrets.SNOWFLAKE_USER }}"
-                password: "${{ secrets.SNOWFLAKE_PASSWORD }}"
-                role: ACCOUNTADMIN
-                database: TRAVEL_PLATFORM_STAGING
-                warehouse: TRAVEL_WH
-                schema: RAW
-                threads: 4
-          PROFILE
-
       - name: Download latest production dbt manifest
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -306,11 +276,16 @@ jobs:
           name: dbt-manifest
           path: dbt/state
 
-      - name: Execute deferred dbt build on modified models
+      - name: Execute deferred dbt build on modified models (against STAGING)
         working-directory: dbt
+        env:
+          DBT_PROFILES_DIR: .
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
           dbt deps
-          dbt build --select state:modified+ --defer --state ./state
+          dbt build --target staging --select state:modified+ --defer --state ./state
 
       - name: Send Slack alert on success
         if: success()
