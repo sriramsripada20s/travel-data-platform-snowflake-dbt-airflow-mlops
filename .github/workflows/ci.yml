@@ -279,14 +279,14 @@ jobs:
       - name: Install dbt core & Snowflake adapter
         run: pip install dbt-core dbt-snowflake
 
-      - name: Configure dbt profile from repository secrets
+      - name: Write profile from secrets
         run: |
           mkdir -p ~/.dbt
           cat > ~/.dbt/profiles.yml << PROFILE
           travel_experience_platform:
-            target: prod
+            target: staging
             outputs:
-              prod:
+              staging:
                 type: snowflake
                 account: "${{ secrets.SNOWFLAKE_ACCOUNT }}"
                 user: "${{ secrets.SNOWFLAKE_USER }}"
