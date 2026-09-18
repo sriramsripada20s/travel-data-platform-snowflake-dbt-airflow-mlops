@@ -1,10 +1,22 @@
 name: CI
 
+# ============================================================================
+# TRIGGER POLICY
+# ============================================================================
+# Runs strictly on pull requests targeting 'main'.
+# Code validation happens once during the PR phase prior to merging.
+# On-merge deployment and notifications are handled separately by CD workflows.
 on:
   pull_request:
     branches: [main]
 
 jobs:
+  # ============================================================================
+  # JOB 1: PATH CHANGE DETECTION
+  # ============================================================================
+  # Runs first to inspect modified paths in the PR diff.
+  # Exposes boolean flags (true/false) consumed by downstream jobs to bypass
+  # unnecessary steps (e.g., skipping dbt checks when modifying documentation).
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
@@ -12,8 +24,11 @@ jobs:
       python: ${{ steps.filter.outputs.python }}
       airflow: ${{ steps.filter.outputs.airflow }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Evaluate path filters
+        uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
@@ -25,79 +40,103 @@ jobs:
             airflow:
               - 'airflow/**'
 
+  # ============================================================================
+  # JOB 2: GLOBAL STATIC CODE LINTING
+  # ============================================================================
+  # Always executes across all PRs regardless of modified paths.
+  # - Ruff: Lints Python code for syntax bugs, undefined variables, and unused imports.
+  # - SQLFluff: Formats and lints dbt Snowflake SQL models using Jinja templating
+  #   without requiring live Snowflake warehouse credentials.
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install lint tools
+      - name: Install linting tools
         run: pip install ruff sqlfluff
 
-      - name: Lint Python (ruff)
+      - name: Lint Python source code (ruff)
         run: ruff check src/ ml/ airflow/dags/ streamlit_app/
 
-      - name: Lint dbt SQL (sqlfluff)
+      - name: Lint dbt SQL models (sqlfluff)
         run: sqlfluff lint dbt/models/ --dialect snowflake
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *lint* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *lint* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
+  # ============================================================================
+  # JOB 3: REPOSITORY SECRETS SCANNING
+  # ============================================================================
+  # Always executes across all PRs.
+  # Uses Gitleaks to inspect full git commit history (fetch-depth: 0) to prevent
+  # accidental commits of private keys, tokens, or .env secrets.
   secrets-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository commit history
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Scan for committed secrets
+      - name: Scan repository for leaked credentials
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *secrets-scan* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *secrets-scan* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
+  # ============================================================================
+  # JOB 4: OFFLINE DBT JINJA / SYNTAX COMPILATION
+  # ============================================================================
+  # Path-gated: Runs only when changes touch 'dbt/**'.
+  # Generates a dummy profiles.yml to verify Jinja macros, package dependencies,
+  # and SQL syntax compile cleanly without opening a live Snowflake connection.
   dbt-parse:
     needs: detect-changes
     if: needs.detect-changes.outputs.dbt == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dbt
+      - name: Install dbt core & Snowflake adapter
         run: pip install dbt-core dbt-snowflake
 
-      - name: Write a dummy profile (no real connection needed for parse)
+      - name: Configure dummy dbt profile (No database connection needed)
         run: |
           mkdir -p ~/.dbt
           cat > ~/.dbt/profiles.yml << 'PROFILE'
@@ -116,38 +155,46 @@ jobs:
                 threads: 1
           PROFILE
 
-      - name: dbt parse
+      - name: Install dbt dependencies & verify syntax
         working-directory: dbt
         run: |
           dbt deps
           dbt parse
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *dbt-parse* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *dbt-parse* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
+  # ============================================================================
+  # JOB 5: CONTAINERIZED AIRFLOW DAG INTEGRITY TESTS
+  # ============================================================================
+  # Path-gated: Runs only when changes touch 'airflow/**'.
+  # Builds the actual production Airflow Docker image and executes Pytest DAG
+  # integrity checks inside the container environment.
+  # Catches environment mismatches, missing providers, and parsing errors.
   docker-build-and-dag-tests:
     needs: detect-changes
     if: needs.detect-changes.outputs.airflow == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Build the Airflow image
+      - name: Build deployment Docker image
         working-directory: airflow
         run: docker build -t travel-platform-airflow:ci .
 
-      - name: Run DAG integrity tests inside the built image
+      - name: Execute Pytest DAG integrity suite inside image
         run: |
           docker run --rm \
             -v "${{ github.workspace }}/airflow/dags:/opt/airflow/dags" \
@@ -155,28 +202,36 @@ jobs:
             travel-platform-airflow:ci \
             bash -c "pip install pytest && python -m pytest /opt/airflow/tests/airflow/ -v"
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *docker-build-and-dag-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *docker-build-and-dag-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
+  # ============================================================================
+  # JOB 6: PYTHON BUSINESS LOGIC & ML UNIT TESTS
+  # ============================================================================
+  # Path-gated: Runs only when changes touch 'src/**' or 'ml/**'.
+  # Runs Pytest suite against pure-python functions covering data generation
+  # formulas and data split logic without requiring a live Snowflake connection.
   unit-tests:
     needs: detect-changes
     if: needs.detect-changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
@@ -184,38 +239,47 @@ jobs:
         run: |
           pip install pytest pandas python-dotenv snowflake-connector-python
 
-      - name: Run unit tests
+      - name: Execute Python unit tests
         run: pytest tests/unit/ -v
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *unit-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *unit-tests* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
+  # ============================================================================
+  # JOB 7: DBT SLIM CI (STATE DEFERRAL TESTING)
+  # ============================================================================
+  # Path-gated: Runs only when changes touch 'dbt/**'.
+  # Downloads the production manifest.json from the latest successful run on main.
+  # Executes 'dbt build' ONLY for modified models and downstream dependents
+  # (--select state:modified+ --defer), targeting an isolated staging database.
   dbt-slim-ci:
     needs: detect-changes
     if: needs.detect-changes.outputs.dbt == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dbt
+      - name: Install dbt core & Snowflake adapter
         run: pip install dbt-core dbt-snowflake
 
-      - name: Write profile from secrets
+      - name: Configure dbt profile from repository secrets
         run: |
           mkdir -p ~/.dbt
           cat > ~/.dbt/profiles.yml << PROFILE
@@ -234,7 +298,7 @@ jobs:
                 threads: 4
           PROFILE
 
-      - name: Download production manifest
+      - name: Download latest production dbt manifest
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: dbt-manifest.yml
@@ -242,22 +306,81 @@ jobs:
           name: dbt-manifest
           path: dbt/state
 
-      - name: dbt build (state:modified+ only, deferred)
+      - name: Execute deferred dbt build on modified models
         working-directory: dbt
         run: |
           dbt deps
           dbt build --select state:modified+ --defer --state ./state
 
-      - name: Notify Slack on success
+      - name: Send Slack alert on success
         if: success()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":white_check_mark: CI passed: *dbt-slim-ci* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
 
-      - name: Notify Slack on failure
+      - name: Send Slack alert on failure
         if: failure()
         run: |
           curl -X POST -H 'Content-type: application/json' \
             --data '{"text": ":rotating_light: CI failed: *dbt-slim-ci* on '"${{ github.repository }}"'\nRun: https://github.com/'"${{ github.repository }}"'/actions/runs/'"${{ github.run_id }}"'"}' \
             "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
+
+  # ============================================================================
+  # JOB 8: PIPELINE SUMMARY REPORTING
+  # ============================================================================
+  # Always executes after all upstream jobs complete (if: always()).
+  # Aggregates pass/fail/skip statuses from upstream jobs and posts a structured
+  # Markdown summary table to $GITHUB_STEP_SUMMARY.
+  # Treats path-filtered skips as successful skips (not failures).
+  summary:
+    needs: [detect-changes, lint, secrets-scan, dbt-parse, docker-build-and-dag-tests, unit-tests, dbt-slim-ci]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate workflow summary table
+        run: |
+          echo "# CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Map upstream job statuses into a associative array
+          declare -A results=(
+            ["detect-changes"]="${{ needs.detect-changes.result }}"
+            ["lint"]="${{ needs.lint.result }}"
+            ["secrets-scan"]="${{ needs.secrets-scan.result }}"
+            ["dbt-parse"]="${{ needs.dbt-parse.result }}"
+            ["docker-build-and-dag-tests"]="${{ needs.docker-build-and-dag-tests.result }}"
+            ["unit-tests"]="${{ needs.unit-tests.result }}"
+            ["dbt-slim-ci"]="${{ needs.dbt-slim-ci.result }}"
+          )
+
+          overall="success"
+          for job in "${!results[@]}"; do
+            status="${results[$job]}"
+            case "$status" in
+              success)
+                echo "| $job | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+                ;;
+              skipped)
+                # Job skipped due to path filtering rules (valid behavior)
+                echo "| $job | ⏭️ Skipped (No matching file changes) |" >> $GITHUB_STEP_SUMMARY
+                ;;
+              failure)
+                echo "| $job | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+                overall="failure"
+                ;;
+              *)
+                echo "| $job | ⚠️ $status |" >> $GITHUB_STEP_SUMMARY
+                ;;
+            esac
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$overall" = "success" ]; then
+            echo "## ✅ Overall: All required checks passed or were correctly skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Overall: One or more required checks failed" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
