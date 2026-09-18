@@ -447,34 +447,53 @@ train_model -> evaluate_model -> decide_promotion
 
 ---
 
-## CI/CD Pipeline
+## ⚙️ Automated Testing (CI) & Deployment (CD)
 
-### CI — six checks, enforced via branch protection
+Before code reaches production, two automated pipelines handle quality control and deployment: **Continuous Integration (CI)** tests proposed changes on every Pull Request, while **Continuous Deployment (CD)** automatically ships approved code to production upon merging to `main`.
 
-Every pull request runs six automated checks, verified end-to-end with a real test PR showing the merge button disabled until all six passed:
+---
 
-| Check | What it validates |
-|---|---|
-| `lint` | Python (`ruff`) + SQL (`sqlfluff`) — real bug patterns, not just style |
-| `secrets-scan` | No credentials ever committed (`gitleaks`) |
-| `dbt-parse` | Every dbt model compiles (dummy credentials, no live warehouse needed) |
-| `docker-build-and-dag-tests` | 10 DAG integrity tests, run **inside the real deployment image** — not just against a bare local Airflow install |
-| `unit-tests` | 25 tests covering the demand/cancellation formulas (`business_logic.py`) and the leakage-safe train/test split (`ml/data_loader.py`) |
-| `dbt-slim-ci` | `dbt build --select state:modified+ --defer` — only rebuilds/tests what actually changed in the PR, deferring everything unchanged to production's existing state, compared against a `manifest.json` published on every merge to `main` |
+### 🛡️ 1. Continuous Integration (CI) — Pre-Merge Quality Gate
+
+Whenever a Pull Request (PR) is opened, an automated suite of **nine path-filtered checks** runs in parallel. To save compute time and cloud costs, job-level filtering (`detect-changes`) ensures that only relevant jobs execute based on modified files (e.g., updating a dbt model will not trigger an Airflow Docker image rebuild).
+
+All PRs must pass these checks via GitHub Branch Protection rules before merging is permitted:
+
+| Check | Scope / Path | Purpose & Validation |
+| :--- | :--- | :--- |
+| **`detect-changes`** | All PRs | Inspects modified file paths to trigger or skip downstream jobs dynamically. |
+| **`lint`** | All PRs | Scans Python (`ruff`) and SQL (`sqlfluff`) for syntax errors, formatting, and bug patterns. |
+| **`secrets-scan`** | All PRs | Scans git commit history with `gitleaks` to prevent accidental credential leaks. |
+| **`dbt-parse`** | `dbt/**` | Verifies Jinja and SQL model compilation offline using dummy credentials without database overhead. |
+| **`docker-build-and-dag-tests`** | `airflow/**` | Builds the production Airflow Docker container and executes 10 DAG integrity unit tests inside it. |
+| **`unit-tests`** | `src/**`, `ml/**` | Runs 25 Pytest unit tests covering core business logic, demand formulas, and leakage-safe ML splits. |
+| **`dbt-slim-ci`** | `dbt/**` | Executes `dbt build --select state:modified+ --defer` against an isolated `TRAVEL_PLATFORM_STAGING` database. |
+| **`summary`** | All PRs | Aggregates all job statuses into a single Markdown summary table on the workflow run page. |
+
+> 💡 **Local Development Protection:** Pre-commit hooks (`.pre-commit-config.yaml`) run locally on your machine before a commit is created, catching formatting, secret leaks, and coverage issues instantly before pushing code to GitHub.
 
 <img width="1728" height="670" alt="image" src="https://github.com/user-attachments/assets/3570157d-47ab-49d6-9867-80c7569fee0a" />
 
-### CD — dbt docs and the dashboard, both auto-deployed on merge
+<img width="1220" height="458" alt="image" src="https://github.com/user-attachments/assets/3dd73586-ea94-48fc-a324-6a6c5c7dc6da" />
 
-Two independent, path-scoped workflows, authenticating via a dedicated `production` GitHub Environment (secrets scoped there, not at the repo level):
+<img width="682" height="493" alt="image" src="https://github.com/user-attachments/assets/2a10ac2d-289b-40f9-ab44-7c3c10e94384" />
 
-| Workflow | Triggers on | Does |
-|---|---|---|
-| `deploy-docs.yml` | Changes to `dbt/` merged to `main` | `dbt docs generate` against real Snowflake, publishes the full lineage/catalog site to GitHub Pages |
-| `deploy-streamlit.yml` | Changes to `streamlit_app/` merged to `main` | `snow streamlit deploy --replace` — updates the existing `TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD` app in place (same URL every time, never a new object) |
+---
 
-📊 **[Live dbt documentation & lineage](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/)** — auto-published on every merge to `main`.
+### 🚀 2. Continuous Deployment (CD) — Automated Production Releases
 
+Once a Pull Request passes all CI checks and merges into `main`, path-scoped CD workflows automatically update production artifacts in-place without manual intervention. Credentials are authenticated securely via a dedicated `production` GitHub Environment.
+
+| Workflow | Trigger Path | Automated Deployment Action |
+| :--- | :--- | :--- |
+| **`deploy-docs.yml`** | `dbt/**` | Runs `dbt docs generate` against Snowflake and deploys the live data catalog to GitHub Pages. |
+| **`deploy-streamlit.yml`** | `streamlit_app/**` | Runs `snow streamlit deploy --replace` to update the native Streamlit app in Snowflake in-place. |
+
+---
+### 📊 Live Artifacts & Documentation
+
+* **Data Catalog & Lineage Graph:** 🔗 [View Live dbt Documentation](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/) *(Auto-updated on every merge to `main`)*
+* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`).
 
 ## Repository Structure — as actually built
 
