@@ -447,15 +447,25 @@ train_model -> evaluate_model -> decide_promotion
 
 ---
 
-## ⚙️ Automated Testing (CI) & Deployment (CD)
+## ⚙️ Automated Testing (CI) & Continuous Deployment (CD)
 
-Before code reaches production, two automated pipelines handle quality control and deployment: **Continuous Integration (CI)** tests proposed changes on every Pull Request, while **Continuous Deployment (CD)** automatically ships approved code to production upon merging to `main`.
+### 🏗️ 0. Environment Architecture — Three Isolated Snowflake Databases
+
+Before any pipeline logic runs, three genuinely separate Snowflake databases enforce a strict `dev` → `staging` → `prod` environment separation:
+
+| Target | Database | Used By |
+| :--- | :--- | :--- |
+| **`dev`** | `TRAVEL_PLATFORM_DEV` | Local development and syntax checks. |
+| **`staging`** | `TRAVEL_PLATFORM_STAGING` | `dbt-slim-ci` (every PR) — a zero-copy Snowflake clone of production. |
+| **`prod`** | `TRAVEL_PLATFORM` | `dbt-manifest.yml`, `deploy-docs.yml`, and Airflow's daily `dbt_build` task. |
+
+All three targets are defined in a single, committed `dbt/profiles.yml` using runtime `env_var()` calls. Execution targets are strictly controlled via `--target <dev|staging|prod>` flags across all workflows.
 
 ---
 
 ### 🛡️ 1. Continuous Integration (CI) — Pre-Merge Quality Gate
 
-Whenever a Pull Request (PR) is opened, an automated suite of **nine path-filtered checks** runs in parallel. To save compute time and cloud costs, job-level filtering (`detect-changes`) ensures that only relevant jobs execute based on modified files (e.g., updating a dbt model will not trigger an Airflow Docker image rebuild).
+Whenever a Pull Request (PR) is opened targeting `main`, an automated suite of **eight path-filtered checks** runs in parallel. Job-level filtering (`detect-changes`) ensures only jobs relevant to modified files execute.
 
 All PRs must pass these checks via GitHub Branch Protection rules before merging is permitted:
 
@@ -463,37 +473,46 @@ All PRs must pass these checks via GitHub Branch Protection rules before merging
 | :--- | :--- | :--- |
 | **`detect-changes`** | All PRs | Inspects modified file paths to trigger or skip downstream jobs dynamically. |
 | **`lint`** | All PRs | Scans Python (`ruff`) and SQL (`sqlfluff`) for syntax errors, formatting, and bug patterns. |
-| **`secrets-scan`** | All PRs | Scans git commit history with `gitleaks` to prevent accidental credential leaks. |
-| **`dbt-parse`** | `dbt/**` | Verifies Jinja and SQL model compilation offline using dummy credentials without database overhead. |
+| **`secrets-scan`** | All PRs | Scans full commit history using `gitleaks` to prevent accidental credential leaks. |
+| **`dbt-parse`** | `dbt/**` | Verifies Jinja and SQL model compilation using `dbt/profiles.yml` (`dev` target) with placeholder credentials. |
 | **`docker-build-and-dag-tests`** | `airflow/**` | Builds the production Airflow Docker container and executes 10 DAG integrity unit tests inside it. |
 | **`unit-tests`** | `src/**`, `ml/**` | Runs 25 Pytest unit tests covering core business logic, demand formulas, and leakage-safe ML splits. |
-| **`dbt-slim-ci`** | `dbt/**` | Executes `dbt build --select state:modified+ --defer` against an isolated `TRAVEL_PLATFORM_STAGING` database. |
+| **`dbt-slim-ci`** | `dbt/**` | Executes `dbt build --target staging --select state:modified+ --defer` against `TRAVEL_PLATFORM_STAGING`. |
 | **`summary`** | All PRs | Aggregates all job statuses into a single Markdown summary table on the workflow run page. |
 
-> 💡 **Local Development Protection:** Pre-commit hooks (`.pre-commit-config.yaml`) run locally on your machine before a commit is created, catching formatting, secret leaks, and coverage issues instantly before pushing code to GitHub.
+> 💡 **Local Development Protection:** Pre-commit hooks (`.pre-commit-config.yaml`) run automatically at `git commit` time—file hygiene, `gitleaks`, `dbt parse`, and enforced minimum test/description coverage per model—catching issues before code reaches GitHub.
 
-<img width="1728" height="670" alt="image" src="https://github.com/user-attachments/assets/3570157d-47ab-49d6-9867-80c7569fee0a" />
-
-<img width="1220" height="458" alt="image" src="https://github.com/user-attachments/assets/3dd73586-ea94-48fc-a324-6a6c5c7dc6da" />
-
-<img width="682" height="493" alt="image" src="https://github.com/user-attachments/assets/2a10ac2d-289b-40f9-ab44-7c3c10e94384" />
+#### CI Execution & Slack Integration
+![CI Pipeline](https://github.com/user-attachments/assets/3570157d-47ab-49d6-9867-80c7569fee0a)
+![CI Summary Table](https://github.com/user-attachments/assets/3dd73586-ea94-48fc-a324-6a6c5c7dc6da)
+![Slack Notifications](https://github.com/user-attachments/assets/2a10ac2d-289b-40f9-ab44-7c3c10e94384)
 
 ---
 
-### 🚀 2. Continuous Deployment (CD) — Automated Production Releases
+### 🔀 2. Merge Notification — Decoupled from CI/CD
 
-Once a Pull Request passes all CI checks and merges into `main`, path-scoped CD workflows automatically update production artifacts in-place without manual intervention. Credentials are authenticated securely via a dedicated `production` GitHub Environment.
+`merge-notify.yml` fires once on every push to `main`—sending a Slack notification containing the commit message, author, and build trigger status. Decoupling this step avoids duplicate CI workflow execution on merge events.
+
+---
+
+### 🚀 3. Continuous Deployment (CD) — Automated Production Releases
+
+Once a PR passes all CI checks and merges into `main`, path-scoped CD workflows automatically update production artifacts in place using credentials scoped to a dedicated `production` GitHub Environment.
 
 | Workflow | Trigger Path | Automated Deployment Action |
 | :--- | :--- | :--- |
-| **`deploy-docs.yml`** | `dbt/**` | Runs `dbt docs generate` against Snowflake and deploys the live data catalog to GitHub Pages. |
-| **`deploy-streamlit.yml`** | `streamlit_app/**` | Runs `snow streamlit deploy --replace` to update the native Streamlit app in Snowflake in-place. |
+| **`dbt-manifest.yml`** | `dbt/**` | Runs `dbt build --target prod` against Snowflake and publishes `manifest.json` as the baseline state for PR deferral. |
+| **`deploy-docs.yml`** | `dbt/**` | Executes `dbt docs generate --target prod` and deploys the live data catalog to GitHub Pages. |
+| **`deploy-streamlit.yml`** | `streamlit_app/**` | Runs `snow streamlit deploy --replace --temporary-connection` to update the native Streamlit app in Snowflake in place. |
+
+> 📌 **Architectural Note:** Merging a dbt model updates the catalog and manifest artifacts immediately, while actual production table materialization occurs on Airflow's next daily scheduled run (`dbt_build`).
 
 ---
+
 ### 📊 Live Artifacts & Documentation
 
-* **Data Catalog & Lineage Graph:** 🔗 [View Live dbt Documentation](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/) *(Auto-updated on every merge to `main`)*
-* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`).
+* **Data Catalog & Lineage Graph:** 🔗 [View Live dbt Documentation](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/) *(Auto-updated on every merge touching `dbt/`)*
+* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit-in-Snowflake (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`), auto-deployed on every merge touching `streamlit_app/`.
 
 ## Repository Structure — as actually built
 
@@ -504,7 +523,9 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │   ├── dags/
 │   │   ├── travel_platform_daily_pipeline.py
 │   │   └── ml_training_pipeline.py
-│   ├── dbt_profiles/            (profiles.yml for dbt inside the container)
+│   ├── dbt_profiles/            (profiles.yml for dbt INSIDE the Airflow
+│   │                              container — separate from dbt/profiles.yml,
+│   │                              not yet migrated to the centralized one)
 │   ├── Dockerfile
 │   ├── docker-compose.yaml
 │   └── requirements.txt
@@ -515,6 +536,9 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │       └── incremental/          (daily output, dt=YYYY-MM-DD partitioned)
 │
 ├── dbt/
+│   ├── profiles.yml              (NEW — the single, committed, secret-free
+│   │                               dbt connection config; dev/staging/prod
+│   │                               targets, credentials via env_var() only)
 │   └── models/
 │       ├── staging/ , intermediate/ , marts/ (incl. marts/ml/)
 │
@@ -547,12 +571,21 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │   ├── unit/                    (25 tests — business_logic.py, ml/data_loader.py)
 │   └── airflow/                 (10 DAG integrity tests, run inside the Docker image)
 │
+├── .pre-commit-config.yaml       (NEW — local, commit-time hooks: file hygiene,
+│                                  gitleaks, dbt parse, enforced test/description
+│                                  coverage per model)
+│
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                (6 jobs — see CI/CD Pipeline section)
-│       ├── dbt-manifest.yml      (publishes the Slim CI comparison manifest)
-│       ├── deploy-docs.yml       (dbt docs -> GitHub Pages, on merge)
-│       └── deploy-streamlit.yml  (dashboard -> Snowflake, on merge)
+│       ├── ci.yml                 (7 jobs — detect-changes, lint, secrets-scan,
+│       │                            dbt-parse, docker-build-and-dag-tests,
+│       │                            unit-tests, dbt-slim-ci, summary)
+│       ├── dbt-manifest.yml       (real dbt build against PROD; publishes the
+│       │                            Slim CI comparison manifest)
+│       ├── deploy-docs.yml        (dbt docs -> GitHub Pages, on merge)
+│       ├── deploy-streamlit.yml   (dashboard -> Snowflake, on merge)
+│       └── merge-notify.yml       (NEW — one Slack message per merge to main,
+│                                    decoupled from CI re-running)
 │
 ├── docs/
 │   ├── phase_1_summary.md ... phase_7_summary.md
@@ -562,6 +595,7 @@ travel-data-platform-snowflake-dbt-airflow-mlops/
 │   └── business_rules.md
 │
 ├── .gitignore
+```
 └── README.md
 ```
 
