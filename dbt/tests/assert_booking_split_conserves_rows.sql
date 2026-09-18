@@ -12,7 +12,7 @@ split_total as (
         + (select count(*) from {{ ref('int_orphaned_bookings') }})
         as row_count
 )
--- the CROSS JOIN is used because we are joining two subqueries that each return exactly one row 
+-- the CROSS JOIN is used because we are joining two subqueries that each return exactly one row
 -- (a single total count), and they share no common key to join on.
 select
     staging_total.row_count as staging_row_count,

@@ -30,7 +30,7 @@ models:
   # --------------------------------------------------------------------------
   - name: ml_base_features
     description: >
-      One row per experience + date. Joins calendar and experience static 
+      One row per experience + date. Joins calendar and experience static
       attributes with the day's actual outcomes (target_* columns).
     columns:
       - name: experience_id
@@ -79,7 +79,7 @@ models:
   # --------------------------------------------------------------------------
   - name: ml_demand_features
     description: >
-      Final, training-ready feature table for demand forecasting. The single 
+      Final, training-ready feature table for demand forecasting. The single
       source of truth for downstream Python ML pipelines and Airflow tasks.
       CRITICAL: target_* columns are training labels, NOT input features.
     columns:

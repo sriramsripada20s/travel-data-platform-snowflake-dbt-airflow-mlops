@@ -1,0 +1,46 @@
+fail_fast: false
+repos:
+  # Basic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        #check every .sql/.yml/.yaml/.md file inside dbt/models/, dbt/macros/, or dbt/tests/ — and if any line has trailing whitespace, either auto-fix it or block the commit.
+        files: ^dbt/(models|macros|tests)/.*\.(sql|yml|yaml|md)$
+      - id: end-of-file-fixer
+        files: ^dbt/(models|macros|tests)/.*\.(sql|yml|yaml|md)$
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  # Security scanning -- The exact same secrets-scanning tool your secrets-scan CI job already uses — just running locally, 
+  #first, so if you ever accidentally type a real password into a file, it gets caught the moment you try to commit
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.27.2
+    hooks:
+      - id: gitleaks
+
+  # dbt-specific checks - This runs dbt parse locally, instantly, checking your models compile correctly — same concept as your dbt-parse 
+  #CI job, just faster feedback since it happens on your laptop before you even push.
+  - repo: https://github.com/dbt-checkpoint/dbt-checkpoint
+    rev: v2.0.7
+    hooks:
+      # Blocking: catches broken SQL/Jinja before commit
+      - id: dbt-parse
+        args: ["--cmd-flags", "++project-dir", "dbt"]
+
+      # NOT blocking yet -- run manually first to see what's missing
+      # before promoting to the pre-commit stage
+      - id: check-model-has-tests
+        args: ["--manifest", "dbt/target/manifest.json", "--test-cnt", "2", "--"]
+        files: ^dbt/models
+
+      - id: check-model-has-description
+        args: ["--manifest", "dbt/target/manifest.json"]
+        files: ^dbt/models
+
+      - id: check-model-has-properties-file
+        args: ["--manifest", "dbt/target/manifest.json"]
+        files: ^dbt/models
+        stages: [manual]

@@ -4,7 +4,7 @@
 -- ============================================================================
 -- DATA INTEGRITY NOTE:
 -- We build this from `int_booking_details` (not `stg_bookings`). This ensures
--- that a customer's booking stats only count valid bookings that matched a 
+-- that a customer's booking stats only count valid bookings that matched a
 -- real experience, keeping our metrics 100% clean.
 -- ============================================================================
 
