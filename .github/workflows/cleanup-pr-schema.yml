@@ -1,0 +1,46 @@
+name: Cleanup PR Schema
+
+# Fires when a PR targeting main closes -- whether merged or abandoned.
+# Automated teardown half of the ephemeral-schema pattern: every PR gets
+# its own isolated schema for dbt-slim-ci, and this guarantees it never
+# lingers as warehouse clutter.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  drop-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Drop PR-scoped schema
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          pip install snowflake-connector-python
+          python -c "
+          import snowflake.connector, os
+          conn = snowflake.connector.connect(
+              account=os.environ['SNOWFLAKE_ACCOUNT'],
+              user=os.environ['SNOWFLAKE_USER'],
+              password=os.environ['SNOWFLAKE_PASSWORD'],
+              role='ACCOUNTADMIN', warehouse='TRAVEL_WH',
+              database='TRAVEL_PLATFORM_STAGING',
+          )
+          cur = conn.cursor()
+          schema = f\"RAW_pr_{os.environ['PR_NUMBER']}\"
+          cur.execute(f'DROP SCHEMA IF EXISTS TRAVEL_PLATFORM_STAGING.{schema}')
+          print(f'Dropped schema: {schema}')
+          cur.close()
+          conn.close()
+          "
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text": ":broom: Cleaned up ephemeral schema for PR #'"${{ github.event.pull_request.number }}"'"}' \
+            "${{ secrets.SLACK_CI_WEBHOOK_URL }}"
