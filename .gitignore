@@ -52,3 +52,4 @@ airflow/dbt_profiles/.user.yml
 Thumbs.db
 .vscode/
 .idea/
+dbt/.user.yml
