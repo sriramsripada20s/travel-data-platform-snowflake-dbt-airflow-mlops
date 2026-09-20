@@ -474,10 +474,10 @@ All PRs must pass these checks via GitHub Branch Protection rules before merging
 | **`detect-changes`** | All PRs | Inspects modified file paths to trigger or skip downstream jobs dynamically. |
 | **`lint`** | All PRs | Scans Python (`ruff`) and SQL (`sqlfluff`) for syntax errors, formatting, and bug patterns. |
 | **`secrets-scan`** | All PRs | Scans full commit history using `gitleaks` to prevent accidental credential leaks. |
-| **`dbt-parse`** | `dbt/**` | Verifies Jinja and SQL model compilation using `dbt/profiles.yml` (`dev` target) with placeholder credentials. |
+| **`dbt-parse`** | `dbt/**` | Verifies Jinja and SQL model compilation using the committed `dbt/profiles.yml` (`dev` target) with placeholder credentials. |
 | **`docker-build-and-dag-tests`** | `airflow/**` | Builds the production Airflow Docker container and executes 10 DAG integrity unit tests inside it. |
 | **`unit-tests`** | `src/**`, `ml/**` | Runs 25 Pytest unit tests covering core business logic, demand formulas, and leakage-safe ML splits. |
-| **`dbt-slim-ci`** | `dbt/**` | Executes `dbt build --target staging --select state:modified+ --defer` against `TRAVEL_PLATFORM_STAGING`. |
+| **`dbt-slim-ci`** | `dbt/**` | Executes `dbt build --target staging --select state:modified+ --defer` into an **ephemeral, PR-scoped schema** (`RAW_pr_<PR#>`) inside `TRAVEL_PLATFORM_STAGING` — never the shared staging schema — via a `generate_schema_name` macro override keyed on `DBT_PR_NUMBER`. Mirrors dbt Cloud's official CI pattern, reimplemented for dbt-core. |
 | **`summary`** | All PRs | Aggregates all job statuses into a single Markdown summary table on the workflow run page. |
 
 > 💡 **Local Development Protection:** Pre-commit hooks (`.pre-commit-config.yaml`) run automatically at `git commit` time—file hygiene, `gitleaks`, `dbt parse`, and enforced minimum test/description coverage per model—catching issues before code reaches GitHub.
@@ -504,6 +504,7 @@ Once a PR passes all CI checks and merges into `main`, path-scoped CD workflows 
 | **`dbt-manifest.yml`** | `dbt/**` | Runs `dbt build --target prod` against Snowflake and publishes `manifest.json` as the baseline state for PR deferral. |
 | **`deploy-docs.yml`** | `dbt/**` | Executes `dbt docs generate --target prod` and deploys the live data catalog to GitHub Pages. |
 | **`deploy-streamlit.yml`** | `streamlit_app/**` | Runs `snow streamlit deploy --replace --temporary-connection` to update the native Streamlit app in Snowflake in place. |
+| **`cleanup-pr-schema.yml`** | Fires on PR `closed` | Drops the ephemeral `RAW_pr_<PR#>` schema created by `dbt-slim-ci`, so PR-scoped CI schemas don't accumulate in Snowflake over time. |
 
 > 📌 **Architectural Note:** Merging a dbt model updates the catalog and manifest artifacts immediately, while actual production table materialization occurs on Airflow's next daily scheduled run (`dbt_build`).
 
@@ -512,10 +513,7 @@ Once a PR passes all CI checks and merges into `main`, path-scoped CD workflows 
 ### 📊 Live Artifacts & Documentation
 
 * **Data Catalog & Lineage Graph:** 🔗 [View Live dbt Documentation](https://sriramsripada20s.github.io/travel-data-platform-snowflake-dbt-airflow-mlops/) *(Auto-updated on every merge touching `dbt/`)*
-* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit-in-Snowflake (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`), auto-deployed on every merge touching `streamlit_app/`.## Repository Structure — as actually built
-
-```
-
+* **Interactive Analytics Dashboard:** Hosted natively inside Snowflake via Streamlit-in-Snowflake (`TRAVEL_PLATFORM.MARTS.TRAVEL_DASHBOARD`), auto-deployed on every merge touching `streamlit_app/`.
 ## Repository Structure — as actually built
 
 ```text
